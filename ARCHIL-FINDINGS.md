@@ -21,7 +21,7 @@ x() { jq -n --arg c "$1" '{command:$c}' | curl -sS -X POST "$HOST/api/disks/$ARC
 |---|---|---|
 | 1 | Shared-mode execs can't rename, `chmod` or delete another exec's entries; `archil checkout` inside the command fixes it | Documented in part; gaps |
 | 2 | SQLite fails in any directory an earlier exec created — even creating a new database | Consequence of #1, undocumented |
-| 3 | A failed lookup is cached for 30 s: `open()` returns `ENOENT` for a file that exists, and `--readdir-expiry 0` doesn't help | **New; contradicts docs** |
+| 3 | The ~30 s delay for new files is anchored to the reader's failed lookup, and `--readdir-expiry 0` doesn't shorten it | ~30 s documented in a guide; mechanism and knob are new |
 | 4 | A command that writes pays ~70 ms more `executeMs` | Measured |
 | 5 | `sandbox.exec()` is slower per call than a serverless exec | Measured; cause inferred |
 | 6 | Docs gaps: custom-image queue time, default image contents, exclusive sandbox mounts | Docs |
@@ -67,8 +67,8 @@ x 'archil checkout /mnt/archil/archil-repro/1 && mv /mnt/archil/archil-repro/1/a
 ## 2. SQLite fails in any directory an earlier exec created
 
 **Verified.** A consequence of #1 worth its own note, because the
-[performance tips](https://docs.archil.com/details/performance-tips) give SQLite advice — including WAL mode,
-which fails across execs — and the failure looks like data loss. SQLite's default journal mode deletes its rollback journal on every commit, which needs
+[performance tips](https://docs.archil.com/details/performance-tips) give SQLite tuning advice, including for
+WAL mode (which fails across execs), and the failure looks like data loss. SQLite's default journal mode deletes its rollback journal on every commit, which needs
 a delegation on the directory. So in a directory another exec created, even **creating** a database fails,
 and a database committed earlier becomes unreadable from a default exec once a later commit fails:
 
@@ -90,13 +90,15 @@ Journal modes in a directory from an earlier exec, without a checkout: `DELETE` 
 `PERSIST` ✓ · `MEMORY` ✓. A short "SQLite across execs" note — run `archil checkout` on the database's
 directory, or use `journal_mode=TRUNCATE` — would prevent data that looks lost.
 
-## 3. A failed lookup is cached for 30 s, so `open()` says a file that exists doesn't
+## 3. The ~30 s new-file delay comes from the reader's failed lookup, and `--readdir-expiry 0` doesn't shorten it
 
-**What the docs say.** "Opening a file rechecks it with the disk", file attributes are cached up to 30 s, and
-directory listings up to five minutes, adjustable with `archil set-cache-expiry`
-([Consistency](https://docs.archil.com/details/consistency), [Caching](https://docs.archil.com/details/caching)).
-The CLI's help says `--readdir-expiry 0` "makes every listing and every lookup of an absent name resolve
-against the server".
+**What the docs say.** The guide [What Archil does](https://archil.com/guides/storage-for-agents/what-archil-does)
+says "A new file takes about 30 s to appear on another machine by default" and recommends running
+`archil invalidate-cache` before reading. The reference pages say "opening a file rechecks it with the disk",
+attributes are cached up to 30 s and listings up to five minutes, adjustable with `archil set-cache-expiry`
+([Consistency](https://docs.archil.com/details/consistency), [Caching](https://docs.archil.com/details/caching)),
+but don't mention failed lookups. The CLI's help says `--readdir-expiry 0` "makes every listing and every lookup
+of an absent name resolve against the server".
 
 **What we measured** (BranchLab `visibility`, n = 6 trials). One long-lived reader exec primes its caches,
 then polls; a separate exec creates new files and overwrites existing ones 3, 12 or 20 s later. Each access
@@ -128,12 +130,15 @@ wait
 #            after invalidate-cache True
 ```
 
-**Why it matters:** the common way to hand work between agents or workers — poll until a file appears — waits
-up to 30 s on Archil, and a sandbox that checked for a result file once keeps getting `ENOENT` for it. The
-consistency page's "opening a file rechecks it with the disk" reads as if that can't happen.
+**What this adds to the guide's "about 30 s":** the window is exactly 30 s from the reader's *failed lookup*, not
+from the write — a reader that never looked sees the file at once, and one that looked just before the write
+waits the full 30 s; the directory's listing goes stale too; and the documented per-directory knob doesn't
+shorten it.
 
-**What would help:** document that failed lookups are cached (and for how long); make `--readdir-expiry 0`
-cover them as its help text says, or name `archil invalidate-cache` as the fix.
+**What would help:** make `--readdir-expiry 0` cover absent-name lookups as its help text says (or correct the
+help text), and note failed-lookup caching on the Consistency and Caching reference pages next to "opening a
+file rechecks it" — that's where we looked first, and it is what "poll until the file appears" handoffs between
+agents run into.
 
 ## 4. Performance — a command that writes pays ~70 ms more in `executeMs`
 

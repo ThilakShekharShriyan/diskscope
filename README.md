@@ -70,7 +70,7 @@ Reported to Archil with minimal curl repros in [`ARCHIL-FINDINGS.md`](ARCHIL-FIN
 
 1. **Shared-mode execs can't rename, `chmod` or delete another exec's files (`EROFS`).** Documented for deletes; renames — including write-temp-then-rename — aren't mentioned. Running `archil checkout <dir>` inside the command fixes it in ~14 ms; DiskScope cleans up with a `conditional` mount.
 2. **SQLite fails in any directory an earlier exec created** — even creating a database — and a failed commit leaves it unreadable. `archil checkout` fixes and recovers it; `journal_mode=TRUNCATE` avoids it.
-3. **A missing file stays missing for 30 s.** After a lookup fails, `open()` and `stat()` keep returning `ENOENT` for 30 s even once another exec has written the file; `--readdir-expiry 0` doesn't help, `archil invalidate-cache` does.
+3. **The documented ~30 s new-file delay is anchored to the reader's failed lookup**, not the write: `open()` and `stat()` return `ENOENT` until exactly 30 s after the lookup. `--readdir-expiry 0` doesn't shorten it despite its help text; `archil invalidate-cache` (Archil's documented fix) does.
 4. **Costs worth documenting:** ~70 ms commit per writing exec; ~430 ms per `sandbox.exec()` call; ~110 ms extra queue for a custom image, with occasional 1.3–3.2 s slow starts; the default image already ships Python 3.10.
 
 ## Phase 2 · BranchLab: state correctness across microVMs
@@ -79,7 +79,7 @@ Reported to Archil with minimal curl repros in [`ARCHIL-FINDINGS.md`](ARCHIL-FIN
 
 - **Handoff, SQLite reopen, parallel readers, disjoint writers:** 184 of 184 Archil steps passed over 8 trials, every byte checked (≤31% failure rate at 95% per step — evidence, not proof).
 - **Semantics:** in a directory another exec created, a default exec can overwrite, append and create, but rename, write-temp-then-rename, `chmod`, delete and SQLite fail with `EROFS` — 8/8, identical every time. `archil checkout <dir>` inside the command fixes all ten operations in ~14 ms.
-- **Visibility:** a long-lived reader that has looked up a missing name keeps getting `ENOENT` for exactly **30 s after the lookup**, wherever the write lands (6/6 trials); `--readdir-expiry 0` doesn't change it, `archil invalidate-cache` does. Overwrites are seen on the next `open()`.
+- **Visibility:** Archil documents that a new file takes about 30 s to appear on another machine. We find the window is exactly **30 s after the reader's failed lookup**, wherever the write lands (6/6 trials); `--readdir-expiry 0` doesn't change it, `archil invalidate-cache` does. Overwrites are seen on the next `open()`.
 
 ```bash
 set -a; source .env.local; set +a        # ARCHIL_API_KEY, ARCHIL_DISK_ID, ARCHIL_REGION
