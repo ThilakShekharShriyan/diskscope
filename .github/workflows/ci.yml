@@ -1,0 +1,28 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build and test Rust CLI
+        run: |
+          cargo check --all-targets
+          cargo test
+      - name: Test Python guest fixture
+        run: python3 -m unittest discover -s tests -v
+      - name: Local smoke run and dashboard
+        run: |
+          cargo run --release -- local --runs 1 --size-mib 1 --output results/local.json
+          cargo run --release -- report --input results/local.json data/*.json --output /tmp/index.html
+          test -s /tmp/index.html
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: README charts render from published data
+        run: node scripts/readme-charts.mjs data/*.json

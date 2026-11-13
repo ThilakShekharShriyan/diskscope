@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1008" height="410" viewBox="0 0 1008 410" role="img" aria-label="Archil ÷ local disk — median guest work time, 95% bootstrap CI (log scale)">
+<style>/* Chart tokens + mark classes. Shared by the dashboard and the standalone README SVGs.
+   Palette: validated categorical/phase steps (scripts in the dataviz method), light and dark selected separately. */
+:root {
+  --surface: #fcfcfb; --plane: #f9f9f7; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+  --ph-q: #6250d6; --ph-s: #eda100; --ph-w: #1baf7a; --ph-o: #b9b7ae;
+  --good: #0ca30c; --critical: #d03b3b; --warn: #fab219;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #1a1a19; --plane: #0d0d0d; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --ph-q: #9085e9; --ph-s: #c98500; --ph-w: #199e70; --ph-o: #55544f;
+  }
+}
+
+.ds-chart { display: block; overflow: visible; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.ds-chart text { font-family: inherit; }
+.ds-grid { stroke: var(--grid); stroke-width: 1; }
+.ds-sep { stroke: var(--grid); stroke-width: 1; }
+.ds-ref { stroke: var(--axis); stroke-width: 1.5; }
+.ds-refv { stroke: var(--ink-2); stroke-width: 1.5; }
+.ds-axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ds-strong { fill: var(--ink-2); font-weight: 600; }
+.ds-label { fill: var(--ink); font-size: 13px; font-weight: 600; }
+.ds-sub { fill: var(--muted); font-size: 11px; }
+.ds-muted { fill: var(--muted); font-size: 11.5px; }
+.ds-legend { fill: var(--ink-2); font-size: 12px; }
+.ds-value { fill: var(--ink); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ds-median { stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
+.ds-ring { stroke: var(--surface); stroke-width: 2; }
+.ds-dot { opacity: .9; }
+.ds-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ds-whisker { stroke-width: 2.5; stroke-linecap: round; }
+.ds-hit { fill: transparent; }
+.ds-warm { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
+.ds-warm-key { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
+.ds-ref-key { fill: var(--axis); }
+.f-s1 { fill: var(--s1); } .f-s2 { fill: var(--s2); } .f-s3 { fill: var(--s3); } .f-s4 { fill: var(--s4); }
+.f-s5 { fill: var(--s5); } .f-s6 { fill: var(--s6); } .f-s7 { fill: var(--s7); } .f-s8 { fill: var(--s8); }
+.st-s1 { stroke: var(--s1); } .st-s2 { stroke: var(--s2); } .st-s3 { stroke: var(--s3); } .st-s4 { stroke: var(--s4); }
+.st-s5 { stroke: var(--s5); } .st-s6 { stroke: var(--s6); } .st-s7 { stroke: var(--s7); } .st-s8 { stroke: var(--s8); }
+.ci-s1 { fill: var(--s1); opacity: .16; } .ci-s2 { fill: var(--s2); opacity: .16; } .ci-s3 { fill: var(--s3); opacity: .16; } .ci-s4 { fill: var(--s4); opacity: .16; }
+.ci-s5 { fill: var(--s5); opacity: .16; } .ci-s6 { fill: var(--s6); opacity: .16; } .ci-s7 { fill: var(--s7); opacity: .16; } .ci-s8 { fill: var(--s8); opacity: .16; }
+.f-phase-q { fill: var(--ph-q); } .f-phase-s { fill: var(--ph-s); } .f-phase-w { fill: var(--ph-w); } .f-phase-o { fill: var(--ph-o); }
+</style>
+<rect width="1008" height="410" rx="14" fill="var(--surface)" stroke="var(--border)"/>
+<text x="24" y="36" class="ds-label" style="font-size:16px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif">Archil ÷ local disk — median guest work time, 95% bootstrap CI (log scale)</text>
+<svg x="24" y="54" width="960" height="332" viewBox="0 0 960 332" class="ds-chart"><line x1="250.0" x2="250.0" y1="38" y2="302" class="ds-grid"/><text x="250.0" y="318" class="ds-axis" text-anchor="middle">1.0×</text><line x1="358.8" x2="358.8" y1="38" y2="302" class="ds-grid"/><text x="358.8" y="318" class="ds-axis" text-anchor="middle">2.0×</text><line x1="502.6" x2="502.6" y1="38" y2="302" class="ds-grid"/><text x="502.6" y="318" class="ds-axis" text-anchor="middle">5.0×</text><line x1="611.4" x2="611.4" y1="38" y2="302" class="ds-grid"/><text x="611.4" y="318" class="ds-axis" text-anchor="middle">10×</text><line x1="720.2" x2="720.2" y1="38" y2="302" class="ds-grid"/><text x="720.2" y="318" class="ds-axis" text-anchor="middle">20×</text><line x1="864.0" x2="864.0" y1="38" y2="302" class="ds-grid"/><text x="864.0" y="318" class="ds-axis" text-anchor="middle">50×</text><line x1="250.0" x2="250.0" y1="34" y2="302" class="ds-refv"/><text x="240.0" y="18" class="ds-muted" text-anchor="end">← Archil faster</text><text x="260.0" y="18" class="ds-muted">Archil slower →</text><text x="8" y="55" class="ds-label">stat</text><text x="8" y="69" class="ds-sub">One stat() on the mount root</text><line x1="387.3" x2="422.2" y1="57" y2="57" class="st-s1 ds-whisker"/><circle cx="397.1" cy="57" r="5" class="f-s1 ds-ring"/><rect x="250" y="46" width="614" height="22" class="ds-hit ds-lanehit"/><text x="876" y="61" class="ds-value">2.6×</text><line x1="8" x2="952" y1="76" y2="76" class="ds-sep"/><text x="8" y="93" class="ds-label">small-files</text><text x="8" y="107" class="ds-sub">Create 64 × 16 B files</text><line x1="407.6" x2="464.2" y1="95" y2="95" class="st-s1 ds-whisker"/><circle cx="457.8" cy="95" r="5" class="f-s1 ds-ring"/><rect x="250" y="84" width="614" height="22" class="ds-hit ds-lanehit"/><text x="876" y="99" class="ds-value">3.8×</text><line x1="8" x2="952" y1="114" y2="114" class="ds-sep"/><text x="8" y="131" class="ds-label">fsync-4k</text><text x="8" y="145" class="ds-sub">Write 4 KiB + fsync</text><line x1="324.3" x2="350.6" y1="133" y2="133" class="st-s1 ds-whisker"/><circle cx="336.1" cy="133" r="5" class="f-s1 ds-ring"/><rect x="250" y="122" width="614" height="22" class="ds-hit ds-lanehit"/><text x="876" y="137" class="ds-value">1.7×</text><line x1="8" x2="952" y1="152" y2="152" class="ds-sep"/><text x="8" y="169" class="ds-label">seq-write</text><text x="8" y="183" class="ds-sub">Sequential write + fsync</text><line x1="588.2" x2="620.6" y1="171" y2="171" class="st-s1 ds-whisker"/><circle cx="609.0" cy="171" r="5" class="f-s1 ds-ring"/><rect x="250" y="160" width="614" height="22" class="ds-hit ds-lanehit"/><text x="876" y="175" class="ds-value">9.9×</text><line x1="8" x2="952" y1="190" y2="190" class="ds-sep"/><text x="8" y="207" class="ds-label">seq-read</text><text x="8" y="221" class="ds-sub">Re-read a just-written file (warm)</text><line x1="572.7" x2="609.1" y1="209" y2="209" class="st-s1 ds-whisker"/><circle cx="596.9" cy="209" r="5" class="f-s1 ds-ring"/><rect x="250" y="198" width="614" height="22" class="ds-hit ds-lanehit"/><text x="876" y="213" class="ds-value">9.1×</text><line x1="8" x2="952" y1="228" y2="228" class="ds-sep"/><text x="8" y="245" class="ds-label">sqlite-commit</text><text x="8" y="259" class="ds-sub">25 synchronous=FULL commits</text><line x1="575.4" x2="725.3" y1="247" y2="247" class="st-s1 ds-whisker"/><circle cx="697.8" cy="247" r="5" class="f-s1 ds-ring"/><rect x="250" y="236" width="614" height="22" class="ds-hit ds-lanehit"/><text x="876" y="251" class="ds-value">17×</text><line x1="8" x2="952" y1="266" y2="266" class="ds-sep"/><text x="8" y="283" class="ds-label">hash-64m</text><text x="8" y="297" class="ds-sub">SHA-256 of 64 MiB (CPU only)</text><line x1="288.6" x2="290.0" y1="285" y2="285" class="st-s1 ds-whisker"/><circle cx="289.1" cy="285" r="5" class="f-s1 ds-ring"/><rect x="250" y="274" width="614" height="22" class="ds-hit ds-lanehit"/><text x="876" y="289" class="ds-value">1.3×</text></svg>
+</svg>

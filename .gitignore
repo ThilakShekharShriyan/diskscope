@@ -1,0 +1,9 @@
+/target/
+/.diskscope-work/
+/results/*.json
+/results/*.csv
+.env
+.env.*
+*.perf.data
+flamegraph.svg
+.DS_Store

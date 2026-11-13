@@ -1,0 +1,142 @@
+<p align="center">
+  <a href="https://thilakshekharshriyan.github.io/diskscope/"><img src="docs/assets/hero.svg" alt="DiskScope headline results: warm Archil tool call, queue time, durable fsync ratio, parallel speed-up" width="100%"></a>
+</p>
+
+<h1 align="center">DiskScope</h1>
+
+<p align="center">
+  <b>Reproducible microbenchmarks for serverless microVM execution and network filesystems — built in Rust, measured on <a href="https://archil.com">Archil</a>.</b><br>
+  <a href="https://thilakshekharshriyan.github.io/diskscope/"><b>Interactive dashboard →</b></a> ·
+  <a href="#results">Results</a> · <a href="#methodology">Methodology</a> · <a href="#run-it-yourself">Run it yourself</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ThilakShekharShriyan/diskscope/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ThilakShekharShriyan/diskscope/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Rust" src="https://img.shields.io/badge/rust-stable-orange">
+  <img alt="Observations" src="https://img.shields.io/badge/observations-305-blue">
+  <img alt="Region" src="https://img.shields.io/badge/archil-aws--us--east--1-6250d6">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
+</p>
+
+---
+
+**The question:** an AI agent's tool call increasingly runs as a fresh microVM attached to a shared disk. How much does that cost — per call, per `fsync`, per database commit — compared with a local SSD? DiskScope answers with every raw observation published, distribution-free confidence intervals, and a durable-fsync local baseline so the comparison is fair.
+
+## Results
+
+> Measured 2026-11-13 from a macOS client against Archil `aws-us-east-1`; 305 observations, 100% valid. Raw JSON in [`data/`](data/). Small samples (n = 10–15 per cell): read the intervals, not the tails. Archil samples are pooled across the sequential and 4-parallel runs, whose medians agree (see the dashboard's per-run lanes).
+
+<p align="center"><img src="docs/assets/vs-local.svg" alt="Ratio of Archil to local median guest work time per task, with 95% bootstrap intervals" width="100%"></p>
+
+| Task | What it does | Local (median work) | Archil (median work) | Archil ÷ local [95% CI] | n (Archil / local) |
+|---|---|--:|--:|--:|--:|
+| `stat` | One stat() on the mount root | 13 µs | 34 µs | **2.6×** [2.4×–3.0×] | 15 / 10 |
+| `small-files` | Create 64 × 16 B files | 3.64 ms | 13.7 ms | **3.8×** [2.7×–3.9×] | 15 / 10 |
+| `fsync-4k` | Write 4 KiB + fsync | 3.53 ms | 6.11 ms | **1.7×** [1.6×–1.9×] | 15 / 10 |
+| `seq-write` | Sequential 4 MiB write + fsync | 4.63 ms | 45.6 ms | **9.9×** [8.6×–11×] | 15 / 10 |
+| `seq-read` | Re-read a just-written file (warm) | 264 µs | 2.41 ms | **9.1×** [7.8×–9.8×] | 15 / 10 |
+| `sqlite-commit` | 25 `synchronous=FULL` commits | 18.6 ms | 323 ms | **17×** [8.0×–21×] | 15 / 10 |
+| `hash-64m` | SHA-256 of 64 MiB (CPU control) | 23.9 ms | 30.6 ms | **1.3×** [1.3×–1.3×] | 15 / 10 |
+
+**What stands out**
+
+- **A single durable `fsync` is cheap** — only ~1.7× a local SSD that is *also* forced to flush its write cache (`F_FULLFSYNC`). Without that, macOS `fsync` returns in ~0.15 ms and Archil looks 40× worse; that number would have been wrong.
+- **Many small durable writes compound.** SQLite with `synchronous=FULL` issues several syncs per commit, and lands at ~13 ms per commit on Archil vs ~0.75 ms locally (17×). Bulk sequential writes see ~88 MiB/s inside one call.
+- **Fixed cost dominates short calls.** A no-op tool call takes ~340 ms end-to-end: ~140 ms queue/VM/mount (Archil-reported), ~110 ms guest start-up (Python), ~90 ms network + API. Batch work into fewer calls.
+- **Fan-out is nearly free at this scale.** 1, 2 or 4 concurrent microVMs show the same median `stat()` latency, and running the suite 4-wide finished 151 calls **3.0× faster** with unchanged medians.
+- **CPU is close:** the hash control is 1.3× slower in the guest (different CPU and Python build), so most of the storage gaps above are storage, not compute.
+
+<p align="center"><img src="docs/assets/anatomy.svg" alt="Stacked bars showing median queue, start-up, work and network time per Archil call" width="100%"></p>
+
+<details>
+<summary><b>Every call, plotted</b> (latency per call and timeline)</summary>
+<p align="center"><img src="docs/assets/latency.svg" alt="Dot plot of every call's end-to-end latency per task" width="100%"></p>
+<p align="center"><img src="docs/assets/timeline.svg" alt="Every Archil call in submission order" width="100%"></p>
+</details>
+
+**Platform finding:** after a file has been written and `fsync`ed inside an exec, removing its now-empty directory fails with `EROFS (Read-only file system)` — also via `rm -rf`. DiskScope records this as a separate `cleanup_error` instead of discarding the measurement (73 of 305 observations).
+
+## The dashboard
+
+[`docs/index.html`](https://thilakshekharshriyan.github.io/diskscope/) is one self-contained file — no CDN, no telemetry, works offline from Finder — generated by `diskscope report`:
+
+| | |
+|---|---|
+| **Latency by task** | every call as a dot, median tick, order-statistic CI band; switch between end-to-end, Archil execute, and guest work |
+| **Anatomy** | queue · start-up · work · network per task, with the fixed per-call cost called out |
+| **Archil vs local** | ratio of medians with bootstrap CIs on a log axis centred on parity |
+| **Distribution** | ECDF with p50/p95 references |
+| **Concurrency** | 1/2/4 concurrent microVMs |
+| **Timeline** | every call in submission order — cold starts, drift, stragglers |
+| **Throughput** | MiB/s with intervals |
+| **Raw evidence** | every observation, failures and cleanup warnings included; CSV export; load more JSON runs in the browser |
+
+Light and dark themes, keyboard-accessible tooltips, a colour-blind-validated palette, and a table behind every chart.
+
+## Methodology
+
+DiskScope borrows from [criterion.rs](https://bheisler.github.io/criterion.rs/book/analysis.html), [hyperfine](https://github.com/sharkdp/hyperfine), [fio](https://fio.readthedocs.io/), [ClickBench](https://github.com/ClickHouse/ClickBench) and Hoefler & Belli's [*Scientific Benchmarking of Parallel Computing Systems*](https://htor.inf.ethz.ch/publications/img/hoefler-scientific-benchmarking.pdf).
+
+- **Same code both sides.** A standard-library Python guest ([`src/guest_worker.py`](src/guest_worker.py)) runs identically locally and in Archil's `python:3.13-slim` image. Cross-environment ratios use only the guest's own `perf_counter_ns` interval around the operation.
+- **Fair durability.** Local `fsync` uses `F_FULLFSYNC` on macOS and SQLite uses `PRAGMA fullfsync=ON`, matching Archil's documented "durable once fsync returns" guarantee.
+- **Medians with honest intervals.** Median CIs come from order statistics (binomial, distribution-free): for n=10 the interval is (x₂, x₉) at 97.9% coverage. Ratios use a seeded two-sample percentile bootstrap (4,000 resamples) so the page is reproducible. No outliers are removed; no p99 is claimed from small samples.
+- **Order & drift.** Archil runs shuffle their (task, trial) jobs and record the seed (`environment.shuffle_seed`) from this version on. In the published data, the 4-parallel Archil run is shuffled; the sequential Archil run and the local baseline ran in fixed task order. The timeline chart shows every call in submission order, so drift would be visible.
+- **Warm-up separated.** The first call pulls the image; it is recorded as `image-warmup` and excluded from statistics.
+- **Phase attribution.** Archil reports `queueMs` and `executeMs`; start-up = execute − work; network·API = client round-trip − Archil total.
+- **Limits.** One region, one client location, one disk. Fan-out is closed-loop, so there are no throughput-at-load claims (coordinated omission). `seq-read` is warm-cache. `queueMs` includes VM claim and mount, not raw Firecracker boot.
+
+## Run it yourself
+
+Requirements: Rust stable, Python 3.9+, and — for remote runs — an Archil API key and an Archil disk in `aws-us-east-1`, `aws-us-west-2` or `aws-eu-west-1`.
+
+```bash
+cargo test && python3 -m unittest discover -s tests -v
+
+# Local baseline (no credentials needed)
+cargo run --release -- local --runs 10 --size-mib 4 --output results/local.json
+
+# Archil: put credentials in .env.local (gitignored), then
+#   ARCHIL_API_KEY=key-...   ARCHIL_DISK_ID=dsk-...   ARCHIL_REGION=aws-us-east-1
+set -a; source .env.local; set +a
+cargo run --release -- archil --runs 10 --size-mib 4 --fanout 1,2,4 --parallel 4 --output results/archil.json
+
+# Dashboard + README charts
+cargo run --release -- report --input results/*.json --output docs/index.html
+node scripts/readme-charts.mjs results/*.json      # writes docs/assets/*.svg, prints the results table
+```
+
+`--parallel N` (1–8) runs suite calls N at a time; each call is its own microVM, and the run records its parallelism so it can be compared with sequential runs. Each observation stores `started_ms` for the timeline.
+
+### Safety and cost guardrails
+
+- Never creates or deletes disks; never sends user-supplied shell strings. Region hosts are allowlisted and disk IDs validated before any request.
+- All scratch files live under `/mnt/archil/.diskscope/<run-id>/`; the guest refuses any path outside it.
+- Refuses runs above 200 estimated calls and prints the estimate first.
+- **Stops immediately** on HTTP 401/403/404/429 (bad key, allowance exhausted, missing disk, rate limit), records Archil's `error`/`code`, and saves the partial run.
+- Results store only the last four characters of the disk ID and never the API key.
+
+### Flamegraphs
+
+`cargo install flamegraph && ./scripts/flamegraph.sh` samples the Rust harness's dedicated hot loop. Commit the result as `docs/flamegraph.svg` and the dashboard loads it automatically. This profiles our code, not Archil's control plane.
+
+## Project layout
+
+```
+src/main.rs            CLI: local | archil | report | profile-workload
+src/archil.rs          Archil Exec API client, parallel worker pool, stop-on-fatal
+src/guest_worker.py    the benchmark payload (runs locally and in the microVM)
+dashboard/charts.js    pure SVG chart kernel (browser + Node)
+dashboard/views.js     raw runs -> chart inputs + headline stats
+dashboard/app.js       dashboard interaction
+scripts/readme-charts.mjs  static SVGs for this README
+data/                  published raw runs
+```
+
+## Roadmap
+
+- Native Rust guest binary to remove the Python start-up cost and language confounder.
+- Cold-cache reads, network RTT baselines, and controlled cold-start runs.
+- Multi-region and multi-client runs; n ≥ 30 per cell.
+- Concurrent reader/writer correctness experiments, then BranchLab (disk branching) and SwarmDB.
+
+MIT licensed. Independent research — not affiliated with Archil.
