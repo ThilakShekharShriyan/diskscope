@@ -1,52 +1,50 @@
-/* Chart tokens + mark classes. Shared by the dashboard and the standalone README SVGs.
-   Palette: validated categorical/phase steps (scripts in the dataviz method), light and dark selected separately. */
+/* DiskScope chart tokens + mark classes — shared by the dashboard and the standalone README SVGs.
+   Palette: warm white / beige surfaces, black and grey ink. Series are separated by lightness
+   (near-black, mid grey, light grey) and always carry direct labels or a legend, so identity never
+   depends on hue — which also makes every chart colour-blind-safe by construction. */
 :root {
-  --surface: #fcfcfb; --plane: #f9f9f7; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
-  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
-  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
-  --ph-q: #6250d6; --ph-s: #eda100; --ph-w: #1baf7a; --ph-o: #b9b7ae;
-  --good: #0ca30c; --critical: #d03b3b; --warn: #fab219;
+  color-scheme: light;
+  --plane: #f6f3ec;      /* page: warm beige */
+  --surface: #fffdf8;    /* cards: warm white */
+  --ink: #161513;        /* primary text */
+  --ink-2: #4b4842;      /* secondary text */
+  --muted: #8b867c;      /* axis, captions */
+  --grid: #ebe6dc;       /* hairline grid */
+  --axis: #d2cabd;       /* reference lines */
+  --border: rgba(22, 21, 19, 0.09);
+  --wash: #f1ede4;       /* subtle fills */
+  /* series: lightness steps of one warm neutral */
+  --s1: #161513; --s2: #a0988b; --s3: #5e5951; --s4: #c9c1b4;
+  --s5: #161513; --s6: #a0988b; --s7: #5e5951; --s8: #c9c1b4;
+  /* anatomy phases: an ordinal ramp, darkest = the platform's own cost */
+  --ph-q: #161513; --ph-s: #6b665e; --ph-w: #a79f92; --ph-o: #dcd5c9;
+  --good: #3f6b3a; --critical: #9c3a2e;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --surface: #1a1a19; --plane: #0d0d0d; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
-    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
-    --ph-q: #9085e9; --ph-s: #c98500; --ph-w: #199e70; --ph-o: #55544f;
-  }
-}
-:root[data-theme="dark"] {
-  --surface: #1a1a19; --plane: #0d0d0d; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
-  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
-  --ph-q: #9085e9; --ph-s: #c98500; --ph-w: #199e70; --ph-o: #55544f;
-}
-.ds-chart { display: block; overflow: visible; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.ds-chart { display: block; overflow: visible; font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
 .ds-chart text { font-family: inherit; }
 .ds-grid { stroke: var(--grid); stroke-width: 1; }
 .ds-sep { stroke: var(--grid); stroke-width: 1; }
-.ds-ref { stroke: var(--axis); stroke-width: 1.5; }
-.ds-refv { stroke: var(--ink-2); stroke-width: 1.5; }
-.ds-axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ds-ref { stroke: var(--axis); stroke-width: 1.25; }
+.ds-refv { stroke: var(--ink-2); stroke-width: 1.25; }
+.ds-axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
 .ds-strong { fill: var(--ink-2); font-weight: 600; }
-.ds-label { fill: var(--ink); font-size: 13px; font-weight: 600; }
+.ds-label { fill: var(--ink); font-size: 13px; font-weight: 600; letter-spacing: -.005em; }
 .ds-sub { fill: var(--muted); font-size: 11px; }
 .ds-muted { fill: var(--muted); font-size: 11.5px; }
 .ds-legend { fill: var(--ink-2); font-size: 12px; }
 .ds-value { fill: var(--ink); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .ds-median { stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
+.ds-median-halo { stroke: var(--surface); stroke-width: 6; stroke-linecap: round; }
 .ds-ring { stroke: var(--surface); stroke-width: 2; }
-.ds-dot { opacity: .9; }
+.ds-dot { opacity: .92; }
 .ds-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .ds-whisker { stroke-width: 2.5; stroke-linecap: round; }
 .ds-hit { fill: transparent; }
-.ds-warm { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
-.ds-warm-key { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
+.ds-warm, .ds-warm-key { fill: var(--surface); stroke: var(--muted); stroke-width: 1.5; }
 .ds-ref-key { fill: var(--axis); }
 .f-s1 { fill: var(--s1); } .f-s2 { fill: var(--s2); } .f-s3 { fill: var(--s3); } .f-s4 { fill: var(--s4); }
 .f-s5 { fill: var(--s5); } .f-s6 { fill: var(--s6); } .f-s7 { fill: var(--s7); } .f-s8 { fill: var(--s8); }
 .st-s1 { stroke: var(--s1); } .st-s2 { stroke: var(--s2); } .st-s3 { stroke: var(--s3); } .st-s4 { stroke: var(--s4); }
 .st-s5 { stroke: var(--s5); } .st-s6 { stroke: var(--s6); } .st-s7 { stroke: var(--s7); } .st-s8 { stroke: var(--s8); }
-.ci-s1 { fill: var(--s1); opacity: .16; } .ci-s2 { fill: var(--s2); opacity: .16; } .ci-s3 { fill: var(--s3); opacity: .16; } .ci-s4 { fill: var(--s4); opacity: .16; }
-.ci-s5 { fill: var(--s5); opacity: .16; } .ci-s6 { fill: var(--s6); opacity: .16; } .ci-s7 { fill: var(--s7); opacity: .16; } .ci-s8 { fill: var(--s8); opacity: .16; }
+.ci-s1, .ci-s2, .ci-s3, .ci-s4, .ci-s5, .ci-s6, .ci-s7, .ci-s8 { fill: var(--ink); opacity: .07; }
 .f-phase-q { fill: var(--ph-q); } .f-phase-s { fill: var(--ph-s); } .f-phase-w { fill: var(--ph-w); } .f-phase-o { fill: var(--ph-o); }

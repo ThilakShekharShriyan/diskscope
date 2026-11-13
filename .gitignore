@@ -7,3 +7,5 @@
 *.perf.data
 /flamegraph.svg
 .DS_Store
+/node_modules/
+bench/sandbox/node_modules/

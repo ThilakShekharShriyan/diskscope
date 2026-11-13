@@ -4,27 +4,27 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>DiskScope Benchmark Lab</title>
-  <meta name="description" content="Reproducible microbenchmarks of Archil serverless execution and filesystem latency, measured with a Rust harness." />
-  <meta name="color-scheme" content="light dark" />
+  <meta name="description" content="Reproducible microbenchmarks of Archil serverless exec, warm sandboxes and filesystem latency, measured with a Rust harness." />
+  <meta name="color-scheme" content="light" />
   <style>/*__STYLE__*/</style>
 </head>
 <body>
   <nav class="topnav" aria-label="Sections">
     <div class="wrap">
       <div class="brand">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="var(--s1)" stroke-width="2"/><circle cx="12" cy="12" r="5.5" fill="none" stroke="var(--s1)" stroke-width="2" opacity=".55"/><circle cx="12" cy="12" r="2" fill="var(--s1)"/></svg>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="10" r="2.25" fill="currentColor"/></svg>
         DiskScope
       </div>
       <div class="navlinks">
-        <a href="#atlas">Latency</a><a href="#anatomy">Anatomy</a><a href="#slowdown">vs local</a><a href="#distribution">Distribution</a><a href="#concurrency">Concurrency</a><a href="#timeline">Timeline</a><a href="#throughput">Throughput</a><a href="#raw">Raw data</a><a href="#method">Method</a>
+        <a href="#ladder">Optimisations</a><a href="#atlas">Latency</a><a href="#anatomy">Anatomy</a><a href="#slowdown">vs local</a><a href="#distribution">Distribution</a><a href="#timeline">Timeline</a><a href="#findings">Findings</a><a href="#raw">Data</a><a href="#method">Method</a>
       </div>
-      <button class="iconbtn" id="themeBtn" type="button" aria-label="Toggle color theme">◐ Theme</button>
+      <div class="navmeta"><a href="https://github.com/ThilakShekharShriyan/diskscope">GitHub ↗</a></div>
     </div>
   </nav>
 
   <header class="wrap hero">
-    <div class="eyebrow">Archil · serverless exec · filesystem microbenchmarks</div>
-    <h1>How fast is a tool call on a <span class="accent">shared disk</span>?</h1>
+    <div class="eyebrow">Benchmark lab · Archil serverless exec &amp; sandboxes</div>
+    <h1>How fast is a tool call on a shared disk? <span class="soft">Measured, call by call.</span></h1>
     <p class="verdict" id="verdict">Loading measurements…</p>
     <div class="meta" id="meta"></div>
     <div class="tiles" id="tiles"></div>
@@ -34,7 +34,7 @@
     <div class="wrap">
       <label>Environment <select id="backendFilter"><option value="all">All</option></select></label>
       <label>Task <select id="taskFilter"><option value="all">All tasks</option></select></label>
-      <label>Latency metric
+      <label>Metric
         <span class="seg" id="metricSeg" role="group" aria-label="Latency metric">
           <button type="button" data-metric="client_wall_ms" aria-pressed="true">End-to-end</button>
           <button type="button" data-metric="remote_execute_ms" aria-pressed="false">Archil execute</button>
@@ -46,70 +46,86 @@
   </div>
 
   <main class="wrap">
+    <section class="panel" id="ladder">
+      <div class="ph"><div class="eyebrow">01 · Optimisations</div><div><h2 id="ladderTitle">Every configuration, side by side</h2><p>The same no-op and 4 KiB fsync, end-to-end, across every configuration we measured. Each step is one change: the warm-pool default image, a lazy-importing guest, and a persistent worker inside a warm sandbox.</p></div></div>
+      <div class="chart" id="ladderChart"></div>
+      <p class="insight" id="ladderInsight"></p>
+    </section>
+
     <section class="panel" id="atlas">
-      <div class="ph"><div><div class="eyebrow">01 · Every observation</div><h2>Latency by task</h2><p id="atlasDesc">Each dot is one call. The black tick is the median; the shaded band is a distribution-free confidence interval for that median. Log scale.</p></div><span class="pill">LOWER IS BETTER</span></div>
+      <div class="ph"><div class="eyebrow">02 · Every observation</div><div><h2>Latency by task</h2><p id="atlasDesc"></p></div></div>
       <div class="chart" id="atlasChart"></div>
-      <p class="foot">Intervals use order statistics (no normality or bootstrap assumptions); their exact coverage is in each tooltip. Local end-to-end time includes starting a Python interpreter, Archil end-to-end time includes the network, the API and a microVM, so compare the <em>Guest work</em> view across environments.</p>
+      <p class="foot">Dots are individual calls; the tick is the median; the shaded band is a distribution-free confidence interval for the median (order statistics; exact coverage in each tooltip). Log scale. Local end-to-end includes starting Python; Archil end-to-end includes the network, the API and a microVM — compare <em>Guest work</em> across environments.</p>
     </section>
 
     <section class="panel" id="anatomy">
-      <div class="ph"><div><div class="eyebrow">02 · Where the time goes</div><h2>Anatomy of an Archil call</h2><p>Archil reports queue and execute time for every call; the guest measures its own work, and the client measures the round-trip. The difference is attributed to each phase below.</p></div><span class="pill">ARCHIL ONLY</span></div>
+      <div class="ph"><div class="eyebrow">03 · Where the time goes</div><div><h2>Anatomy of a serverless call</h2><p>Archil reports queue and execute time for every call; the guest times its own work; the client times the round-trip. Default image first, then a no-op on every other exec configuration.</p></div></div>
       <div class="chart" id="anatomyChart"></div>
       <p class="insight" id="anatomyInsight"></p>
-      <p class="foot">Each segment is the median of that phase across calls, so segments sum to roughly — not exactly — the median total. <em>Start-up · setup</em> = Archil execute − measured work: Python interpreter start, imports, and untimed fixture setup (e.g. <code>seq-read</code> writes its file first). <em>Network · API</em> = client round-trip − Archil total.</p>
+      <p class="foot">Segments are per-phase medians, so they sum to roughly — not exactly — the median total. <em>Start-up · commit</em> = Archil execute − measured work: interpreter start, untimed setup, and the commit Archil performs when a command that wrote data exits. <em>Network · API</em> = client round-trip − Archil total.</p>
     </section>
 
     <section class="panel" id="slowdown">
-      <div class="ph"><div><div class="eyebrow">03 · Same code, different storage</div><h2>Archil vs. local disk</h2><p>Ratio of median guest-measured work time, Archil ÷ local, for identical Python operations. Whiskers are 95% bootstrap intervals for the ratio.</p></div><span class="pill">1× = PARITY</span></div>
+      <div class="ph"><div class="eyebrow">04 · Same code, different storage</div><div><h2>Archil vs. local disk</h2><p>Ratio of median guest-measured work time against this Mac's SSD with durable flushes, for identical Python operations. Whiskers are approximate 95% bootstrap intervals.</p></div></div>
       <div class="chart" id="slowdownChart"></div>
-      <p class="foot">Local baseline: this Mac's internal SSD with durable flushes (<code>F_FULLFSYNC</code>, <code>PRAGMA fullfsync</code>), matching Archil's documented "durable once fsync returns" contract. CPU and Python versions differ between environments, so <code>hash-64m</code> is the CPU control row.</p>
+      <p class="foot">Local fsync uses <code>F_FULLFSYNC</code> and SQLite <code>fullfsync</code>, matching Archil's "durable once fsync returns" contract. <code>hash-64m</code> is a CPU-only control row; laptop CPU speed varies with load, so treat its ratio as context, not a result.</p>
     </section>
 
-      <section class="panel" id="distribution">
-        <div class="ph"><div><div class="eyebrow">04 · Shape of the tail</div><h2>Cumulative distribution</h2><p>Share of calls finishing within a given time (follows the task filter).</p></div></div>
-        <div class="chart" id="ecdfChart"></div>
-        <p class="foot">Rings mark the empirical p95. With fewer than ~100 calls, the top of each curve is the slowest few calls, not a stable p99.</p>
-      </section>
-      <section class="panel" id="concurrency">
-        <div class="ph"><div><div class="eyebrow">05 · Fan-out</div><h2>Concurrent microVMs</h2><p>The same <code>stat()</code> call issued 1, 2 or 4 at a time, each in its own microVM.</p></div></div>
-        <div class="chart" id="fanoutChart"></div>
-        <p class="insight" id="fanoutInsight"></p>
-      </section>
+    <section class="panel" id="distribution">
+      <div class="ph"><div class="eyebrow">05 · Shape of the tail</div><div><h2>Cumulative distribution</h2><p>Share of calls finishing within a given time, for the primary configuration of each environment. Follows the task filter.</p></div></div>
+      <div class="chart" id="ecdfChart"></div>
+      <p class="foot">Rings mark the empirical p95. With fewer than ~100 calls the top of each curve is the slowest few calls, not a stable p99.</p>
+    </section>
+
+    <section class="panel" id="concurrency">
+      <div class="ph"><div class="eyebrow">06 · Fan-out</div><div><h2>Concurrent microVMs</h2><p>The same <code>stat()</code> call issued 1, 2 or 4 at a time, each in its own microVM.</p></div></div>
+      <div class="chart" id="fanoutChart"></div>
+      <p class="insight" id="fanoutInsight"></p>
+    </section>
 
     <section class="panel" id="timeline">
-      <div class="ph"><div><div class="eyebrow">06 · Drift &amp; stragglers</div><h2>Every Archil call, in order</h2><p>Submission order within each run. Flat bands mean a stable platform; isolated spikes are stragglers worth investigating, and are kept in every statistic.</p></div></div>
+      <div class="ph"><div class="eyebrow">07 · Drift &amp; stragglers</div><div><h2>Every remote call, in order</h2><p>Submission order within each run. Flat bands mean a stable platform; isolated spikes are stragglers — kept in every statistic.</p></div></div>
       <div class="chart" id="timelineChart"></div>
     </section>
 
     <section class="panel" id="throughput">
-      <div class="ph"><div><div class="eyebrow">07 · Bulk work</div><h2>Throughput</h2><p>Bytes moved per second of measured work, median and 95% interval. Log scale.</p></div><span class="pill">HIGHER IS BETTER</span></div>
+      <div class="ph"><div class="eyebrow">08 · Bulk work</div><div><h2>Throughput</h2><p>Bytes moved per second of measured work; median and interval, log scale.</p></div></div>
       <div class="chart" id="throughputChart"></div>
-      <p class="foot"><code>seq-read</code> reads a file written moments earlier in the same call, so it is served from cache on both sides — it is not a cold-read measurement.</p>
+      <p class="foot"><code>seq-read</code> re-reads a file written moments earlier in the same call, so it is cache-served on both sides — not a cold-read measurement.</p>
+    </section>
+
+    <section class="panel" id="findings">
+      <div class="ph"><div class="eyebrow">09 · Platform findings</div><div><h2>What we reported to Archil</h2><p>Each is reproducible with a few curl calls — full repros in <a href="https://github.com/ThilakShekharShriyan/diskscope/blob/main/ARCHIL-FINDINGS.md">ARCHIL-FINDINGS.md</a>.</p></div></div>
+      <div class="findings">
+        <div><h3>Cross-exec deletes fail with EROFS</h3><p>An exec cannot unlink or rmdir anything inside a directory created by an earlier exec — even a file it just created. Inside one sandbox, the same workload cleans up without error.</p></div>
+        <div><h3>SQLite databases break across execs</h3><p>A database created in one exec gets <code>disk I/O error</code> on the next exec's commit, and is then unreadable. <code>journal_mode=TRUNCATE</code> avoids it.</p></div>
+        <div><h3>Writes pay a commit at exit</h3><p>An exec that wrote data spends ~120 ms more in <em>execute</em> than one that didn't; a persistent sandbox worker avoids it entirely.</p></div>
+        <div><h3>The image choice is a 4.5× queue difference</h3><p>Default image: ~32 ms queue from the warm pool. <code>python:3.13-slim</code>: ~145 ms, booted on demand. The default image already ships Python 3.10.</p></div>
+      </div>
     </section>
 
     <section class="panel" id="raw">
-      <div class="ph"><div><div class="eyebrow">08 · Raw evidence</div><h2>Every observation</h2><p>Failures and cleanup problems stay visible. Hover a row for its error text.</p></div>
-        <div style="display:flex;gap:8px"><label class="iconbtn" for="fileInput">＋ Load JSON</label><input id="fileInput" type="file" accept=".json,application/json" multiple /><button class="iconbtn" id="exportBtn" type="button">↧ CSV</button></div></div>
-      <div class="tablewrap"><table><thead><tr><th>ENV</th><th>TASK</th><th class="num">TRIAL</th><th class="num">PAR.</th><th class="num">END-TO-END</th><th class="num">QUEUE</th><th class="num">EXECUTE</th><th class="num">WORK</th><th>STATUS</th></tr></thead><tbody id="rawRows"></tbody></table></div>
-      <p class="foot" id="rawCount"></p>
+      <div class="ph"><div class="eyebrow">10 · Raw evidence</div><div><h2>Every observation</h2><p>Failures and cleanup warnings stay visible. Hover a row for its error text.</p></div></div>
+      <div class="tablebar"><span id="rawCount"></span><span style="display:flex;gap:8px"><label class="btn" for="fileInput">Load JSON</label><input id="fileInput" type="file" accept=".json,application/json" multiple /><button class="btn" id="exportBtn" type="button">Export CSV</button></span></div>
+      <div class="tablewrap"><table><thead><tr><th>CONFIGURATION</th><th>TASK</th><th class="num">TRIAL</th><th class="num">END-TO-END</th><th class="num">QUEUE</th><th class="num">EXECUTE</th><th class="num">WORK</th><th>STATUS</th></tr></thead><tbody id="rawRows"></tbody></table></div>
     </section>
 
     <section class="panel" id="method">
-      <div class="ph"><div><div class="eyebrow">09 · Methodology</div><h2>How to read these numbers</h2><p>Benchmark design follows Hoefler &amp; Belli's rules for reporting performance results, criterion.rs, hyperfine, fio and ClickBench practice.</p></div></div>
+      <div class="ph"><div class="eyebrow">11 · Methodology</div><div><h2>How to read these numbers</h2><p>Design follows Hoefler &amp; Belli's rules for reporting performance, criterion.rs, hyperfine, fio and ClickBench practice.</p></div></div>
       <div class="method">
-        <div><h3>Statistics</h3><ul><li>Medians, never mean ± σ: latency is skewed and bounded at zero.</li><li>Median intervals from order statistics: exact coverage, no distributional assumptions.</li><li>Ratios use a seeded two-sample bootstrap (4,000 resamples), so the page is reproducible.</li><li>No outliers are removed.</li></ul></div>
-        <div><h3>Fairness</h3><ul><li>Identical Python guest on both sides; comparisons use guest-measured work only.</li><li>Local fsync uses <code>F_FULLFSYNC</code> so both sides pay for durability.</li><li>Archil runs from v0.1 on shuffle (task, trial) order and record the seed; the first sequential Archil run and the local baseline ran in fixed task order.</li><li>Image warm-up is recorded but kept out of every statistic.</li></ul></div>
-        <div><h3>Limits</h3><ul><li>One region, one client location, one disk; small n per cell.</li><li>Fan-out is closed-loop: no throughput-at-load claims (coordinated omission).</li><li><code>seq-read</code> is warm-cache; no cold-read claims.</li><li>Archil's queue time includes VM claim and mount; it is not raw Firecracker boot.</li></ul></div>
+        <div><h3>Statistics</h3><ul><li>Medians, never mean ± σ: latency is skewed and bounded at zero.</li><li>Median intervals from order statistics: exact coverage, no distributional assumptions.</li><li>Ratios use a seeded two-sample bootstrap (labelled approximate at these n).</li><li>Configurations are never pooled; no outliers are removed.</li></ul></div>
+        <div><h3>Fairness</h3><ul><li>Identical Python guest everywhere; cross-environment ratios use guest-measured work only.</li><li>Local fsync uses <code>F_FULLFSYNC</code> so both sides pay for durability.</li><li>Every v0.2 run shuffles (task, trial) order and records the seed.</li><li>Warm-up and sandbox boot are recorded but excluded from statistics.</li></ul></div>
+        <div><h3>Limits</h3><ul><li>One region, one client, one disk; n = 5–10 per cell.</li><li>Fan-out is closed-loop: no throughput-at-load claims.</li><li><code>seq-read</code> is warm-cache; no cold-read claims.</li><li>A sandbox's plain mount holds the disk exclusively while it runs.</li></ul></div>
       </div>
     </section>
 
     <section class="panel" id="profile">
-      <div class="ph"><div><div class="eyebrow">10 · CPU profile</div><h2>Rust flamegraph</h2><p>Sampled CPU stacks of the Rust harness's profiling workload (<code>./scripts/flamegraph.sh</code>): hash mixing, quantile statistics, report JSON round-trips and job shuffling. Click a frame to zoom. This profiles our code, not Archil's control plane.</p></div></div>
-      <div class="flamebox" id="flamebox"><span id="flameEmpty">No flamegraph committed yet. <label for="flameInput" style="color:var(--s1);cursor:pointer">Open a real flamegraph.svg</label> — we never render synthetic profiles.</span><object id="flameObject" type="image/svg+xml" aria-label="Rust CPU flamegraph" hidden></object><input type="file" id="flameInput" accept=".svg,image/svg+xml"/></div>
+      <div class="ph"><div class="eyebrow">12 · CPU profile</div><div><h2>Rust flamegraph</h2><p>Sampled stacks of the harness's synthetic profiling workload (<code>./scripts/flamegraph.sh</code>). It profiles our own code, not Archil's control plane. Click a frame to zoom.</p></div></div>
+      <div class="flamebox" id="flamebox"><span id="flameEmpty">No flamegraph committed yet. <label for="flameInput" style="text-decoration:underline;cursor:pointer;color:var(--ink)">Open a real flamegraph.svg</label> — synthetic profiles are never rendered.</span><object id="flameObject" type="image/svg+xml" aria-label="Rust CPU flamegraph" hidden></object><input type="file" id="flameInput" accept=".svg,image/svg+xml"/></div>
     </section>
   </main>
 
-  <footer class="wrap"><span><strong>DiskScope</strong> · open, reproducible infrastructure research · generated from raw JSON by <code>diskscope report</code></span><span>Not affiliated with Archil · <a href="https://docs.archil.com/api-reference/serverless-execution/exec-disk" rel="noreferrer">Exec API reference</a></span></footer>
+  <footer class="wrap"><span>DiskScope · open, reproducible infrastructure research · generated from raw JSON by <code>diskscope report</code></span><span>Independent; not affiliated with Archil · <a href="https://docs.archil.com/compute/serverless-execution">Archil docs</a></span></footer>
   <div id="tip" role="tooltip"></div>
   <script id="payload" type="application/json">__REPORT_DATA__</script>
   <script>/*__SCRIPT__*/</script>

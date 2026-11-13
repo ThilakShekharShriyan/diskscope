@@ -8,21 +8,25 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-      - name: Build and test Rust CLI
+        with:
+          components: clippy
+      - name: Rust build, lint and tests
         run: |
-          cargo check --all-targets
+          cargo clippy --all-targets -- -D warnings
           cargo test
-      - name: Test Python guest fixture
+      - name: Python guest tests
         run: python3 -m unittest discover -s tests -v
-      - name: Local smoke run and dashboard
+      - name: Local smoke run and dashboard from published data
         run: |
           cargo run --release -- local --runs 1 --size-mib 1 --output results/local.json
-          cargo run --release -- report --input results/local.json data/*.json --output /tmp/index.html
+          cargo run --release -- report --input results/local.json data/*.json data/archive/v0.1/*.json --output /tmp/index.html
           test -s /tmp/index.html
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: README charts render from published data
-        run: node scripts/readme-charts.mjs data/*.json
+        run: node scripts/readme-charts.mjs data/*.json data/archive/v0.1/2026-11-13-archil-sequential.json
+      - name: Sandbox benchmark parses
+        run: node --check bench/sandbox/run.mjs

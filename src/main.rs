@@ -3,12 +3,10 @@ mod model;
 mod report;
 
 use clap::{Parser, Subcommand};
-use model::{tail_chars, Observation, RunReport, TASKS};
+use model::{shuffle, tail_chars, Observation, RunReport, TASKS, WORKER_SCRIPT};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-
-const WORKER_SCRIPT: &str = include_str!("guest_worker.py");
 
 #[derive(Parser)]
 #[command(name = "diskscope", version, about = "Safe Archil serverless and filesystem benchmark lab")]
@@ -42,6 +40,9 @@ enum Cmd {
         /// Run up to N suite calls at once (each call is its own microVM). 1 = strictly sequential.
         #[arg(long, default_value_t = 1)]
         parallel: usize,
+        /// `default` uses Archil's pre-warmed VM pool; an OCI reference (e.g. python:3.13-slim) boots on demand.
+        #[arg(long, default_value = archil::DEFAULT_IMAGE)]
+        image: String,
         #[arg(long, default_value = "results/archil.json")]
         output: PathBuf,
     },
@@ -80,53 +81,50 @@ fn run_local(root: PathBuf, runs: usize, size_mib: usize) -> Result<RunReport, S
         std::env::current_dir().map_err(|e| e.to_string())?.join(root)
     };
     std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
-    let scope = format!("{}-{}", std::process::id(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs());
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let scope = format!("{}-{}", std::process::id(), now.as_secs());
+    let seed = now.as_nanos() as u64 ^ std::process::id() as u64;
     let mut report = RunReport::empty("local", scope.clone(), size_mib, runs);
-    report.environment.notes = "Local baseline launches a fresh Python interpreter per trial; remote uses the identical Python guest source. Host process launch and remote API latency are NOT directly equivalent. Task duration excludes setup for seq-read/sqlite and cleanup.".into();
-    let cwd = root.join(".diskscope").join(&scope);
-    std::fs::create_dir_all(&cwd).map_err(|e| e.to_string())?;
-    for &task in TASKS {
-        for trial in 0..runs {
-            let scoped = cwd.join(format!("{task}-{trial}-1"));
-            let mut observation = Observation {
-                task: task.into(), trial, fanout: 1, ok: false, client_wall_ms: 0.0,
-                remote_total_ms: None, remote_queue_ms: None, remote_execute_ms: None,
-                work_ms: None, operations: None, bytes: None, error: None, cleanup_error: None, started_ms: None, parallel: None,
-            };
-            let start = Instant::now();
-            let child = Command::new("python3")
-                .arg("-c").arg(WORKER_SCRIPT)
-                .arg(task).arg(scoped).arg(size_mib.to_string())
-                .output();
-            observation.client_wall_ms = start.elapsed().as_secs_f64() * 1000.0;
-            match child {
-                Err(e) => observation.error = Some(format!("Could not invoke Python 3: {e}")),
-                Ok(child) => {
-                    if !child.status.success() {
-                        observation.error = Some(tail_chars(&String::from_utf8_lossy(&child.stderr), 600));
-                    } else {
-                        let stdout = String::from_utf8_lossy(&child.stdout);
-                        if let Some(data) = stdout.lines().find_map(|s| s.strip_prefix("DISKSCOPE_JSON=")) {
-                            match serde_json::from_str::<serde_json::Value>(data) {
-                                Ok(parsed) => {
-                                    observation.work_ms = parsed["elapsed_ms"].as_f64();
-                                    observation.operations = parsed["operations"].as_u64();
-                                    observation.bytes = parsed["bytes"].as_u64();
-                                    observation.ok = parsed["valid"].as_bool() == Some(true);
-                                    observation.cleanup_error = parsed["cleanup_error"].as_str().map(str::to_owned);
-                                }
-                                Err(e) => observation.error = Some(format!("Guest JSON error: {e}")),
-                            }
-                        } else { observation.error = Some("Missing DISKSCOPE_JSON line".into()); }
-                    }
+    report.environment.shuffle_seed = Some(seed);
+    report.environment.variant = Some("local SSD · durable fsync".into());
+    report.environment.notes = "Local baseline: a fresh `python3 -S` process per trial running the same guest source as Archil, on this host's disk with durable flushes (F_FULLFSYNC on macOS). Client wall-clock includes interpreter start-up, so compare guest work_ms across environments.".into();
+    let scope_dir = root.join(".diskscope").join(&scope);
+    let mut jobs: Vec<(&str, usize)> = TASKS.iter().flat_map(|&t| (0..runs).map(move |i| (t, i))).collect();
+    shuffle(&mut jobs, seed);
+    let run_start = Instant::now();
+    for (task, trial) in jobs {
+        let mut observation = Observation::new(task, trial, 1);
+        observation.started_ms = Some(run_start.elapsed().as_secs_f64() * 1000.0);
+        observation.parallel = Some(1);
+        let start = Instant::now();
+        let child = Command::new("python3")
+            .arg("-S").arg("-c").arg(WORKER_SCRIPT)
+            .arg(task).arg(scope_dir.join(format!("{task}-{trial}-1"))).arg(size_mib.to_string())
+            .output();
+        observation.client_wall_ms = start.elapsed().as_secs_f64() * 1000.0;
+        match child {
+            Err(e) => observation.error = Some(format!("Could not invoke Python 3: {e}")),
+            Ok(child) => {
+                let parsed = observation.apply_guest_output(&String::from_utf8_lossy(&child.stdout));
+                if !child.status.success() {
+                    observation.ok = false;
+                    observation.error = Some(tail_chars(&String::from_utf8_lossy(&child.stderr), 600));
+                } else if !parsed {
+                    observation.error = Some("Missing or undecodable DISKSCOPE_JSON line".into());
                 }
             }
-            println!("{task:<16} local trial {}: {:.2} ms  {}", trial+1, observation.client_wall_ms, if observation.ok {"OK"} else {"FAIL"});
-            report.observations.push(observation);
+        }
+        println!("{task:<16} local trial {:>2}: {:>8.2} ms  {}", trial + 1, observation.client_wall_ms, if observation.ok {"OK"} else {"FAIL"});
+        report.observations.push(observation);
+    }
+    // The guest removes everything it creates; tidy the (now empty) shared files directory. A failure
+    // here is recorded, never allowed to discard the measurements.
+    let files_dir = root.join(".diskscope").join("files");
+    if files_dir.exists() {
+        if let Err(e) = std::fs::remove_dir(&files_dir) {
+            report.environment.notes.push_str(&format!(" Cleanup warning: could not remove {}: {e}", files_dir.display()));
         }
     }
-    // Only delete the unique directory created by THIS process; never the user's benchmark root.
-    std::fs::remove_dir_all(&cwd).map_err(|e| e.to_string())?;
     Ok(report)
 }
 
@@ -144,7 +142,7 @@ fn mix_accumulator(state: u64, step: u64) -> u64 {
     avalanche(state.wrapping_add(step).rotate_left(13))
 }
 
-/// Phase 1: integer mixing (the hashing kernel used for seeds/jitter).
+/// Phase 1: integer mixing (SplitMix64 finalizer, the same mixing `model::shuffle` uses).
 #[inline(never)]
 fn phase_mix(iterations: u64) -> u64 {
     let mut acc = 0xDEADBEEFu64;
@@ -203,8 +201,9 @@ fn phase_shuffle(rounds: u64) -> usize {
     checksum
 }
 
-/// CPU-only workload with distinct, non-inlined phases so a sampled flamegraph shows where the
-/// harness's own code spends time. `iterations` scales all phases together.
+/// Synthetic CPU-only workload with distinct, non-inlined phases built from the harness's own
+/// building blocks (mixing, quantiles, report serde, shuffling), so a sampled flamegraph has readable
+/// stacks. It is a profiling target, not a measurement of a real benchmark run.
 fn profile_workload(iterations: u64) {
     let started = Instant::now();
     let scale = iterations / 250_000;
@@ -229,7 +228,7 @@ fn main() {
                 if failed > 0 { Err(format!("{failed} task(s) failed; inspect JSON")) } else { Ok(()) }
             })
         }
-        Cmd::Archil { runs, size_mib, fanout, parallel, output } => {
+        Cmd::Archil { runs, size_mib, fanout, parallel, image, output } => {
             (|| {
                 validate(runs, size_mib)?;
                 let levels: Result<Vec<usize>, _> = fanout.split(',').map(|x| x.trim().parse::<usize>()).collect();
@@ -238,10 +237,11 @@ fn main() {
                     return Err("fanout levels must be between 1 and 8".into());
                 }
                 if !(1..=8).contains(&parallel) { return Err("parallel must be between 1 and 8".into()); }
-                let calls = 1 + TASKS.len() * runs + levels.iter().sum::<usize>() * runs;
+                let warmups = parallel.max(levels.iter().copied().max().unwrap_or(1));
+                let calls = warmups + TASKS.len() * runs + levels.iter().sum::<usize>() * runs;
                 if calls > 200 { return Err(format!("Refusing {calls} calls: maximum is 200 per command")); }
-                println!("Planned remote calls: {calls}, including image warmup, up to {parallel} in flight. Does NOT create/delete a disk.");
-                let report = archil::run(runs, size_mib, &levels, parallel)?;
+                println!("Planned remote calls: {calls} ({warmups} warm-up), up to {parallel} in flight, image={image}. Does NOT create/delete a disk.");
+                let report = archil::run(runs, size_mib, &levels, parallel, &image)?;
                 let failed = report.observations.iter().filter(|o| !o.ok).count();
                 save_json(&output, &report)?;
                 if failed > 0 { Err(format!("{failed} task(s) failed; inspect JSON")) } else { Ok(()) }

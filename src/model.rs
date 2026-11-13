@@ -1,5 +1,10 @@
 use serde::{Deserialize, Serialize};
 
+/// The benchmark payload, embedded once and shared by the local and Archil runners.
+pub const WORKER_SCRIPT: &str = include_str!("guest_worker.py");
+/// Marker prefixing the guest's single JSON result line on stdout.
+pub const MARKER: &str = "DISKSCOPE_JSON=";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Observation {
     pub task: String,
@@ -24,6 +29,42 @@ pub struct Observation {
     /// How many calls were allowed in flight at once when this observation was taken.
     #[serde(default)]
     pub parallel: Option<usize>,
+}
+
+impl Observation {
+    pub fn new(task: &str, trial: usize, fanout: usize) -> Self {
+        Self {
+            task: task.into(), trial, fanout, ok: false, client_wall_ms: 0.0,
+            remote_total_ms: None, remote_queue_ms: None, remote_execute_ms: None,
+            work_ms: None, operations: None, bytes: None, error: None, cleanup_error: None,
+            started_ms: None, parallel: None,
+        }
+    }
+
+    /// Fill work fields from guest stdout. Returns false if no parseable result line was found.
+    /// Called before looking at the exit code: a guest whose post-check failed still prints its
+    /// measurement and then exits non-zero, and that measurement must not be thrown away.
+    pub fn apply_guest_output(&mut self, stdout: &str) -> bool {
+        let Some(line) = stdout.lines().find_map(|l| l.strip_prefix(MARKER)) else { return false };
+        let Ok(work) = serde_json::from_str::<GuestResult>(line) else { return false };
+        self.work_ms = Some(work.elapsed_ms);
+        self.operations = Some(work.operations);
+        self.bytes = Some(work.bytes);
+        self.ok = work.valid;
+        self.cleanup_error = work.cleanup_error;
+        if !work.valid { self.error = Some("Guest post-run assertion failed".into()); }
+        true
+    }
+}
+
+#[derive(Deserialize)]
+struct GuestResult {
+    elapsed_ms: f64,
+    operations: u64,
+    bytes: u64,
+    valid: bool,
+    #[serde(default)]
+    cleanup_error: Option<String>,
 }
 
 /// Keep the end of guest stderr: Python puts the actual exception on the last lines.
@@ -59,6 +100,9 @@ pub struct Environment {
     /// Seed of the shuffled (task, trial) order, when the run used one. Replays the exact order.
     #[serde(default)]
     pub shuffle_seed: Option<u64>,
+    /// Human-readable configuration label used to group runs (e.g. "exec · default image").
+    #[serde(default)]
+    pub variant: Option<String>,
 }
 
 impl RunReport {
@@ -84,6 +128,7 @@ impl RunReport {
                 parallel: None,
                 diskscope_version: Some(env!("CARGO_PKG_VERSION").to_owned()),
                 shuffle_seed: None,
+                variant: None,
             },
             observations: Vec::new(),
         }
@@ -153,6 +198,19 @@ mod tests {
           "image":null,"size_mib":1,"runs_per_task":1,"notes":""},"observations":[]}"#;
         let parsed: RunReport = serde_json::from_str(old).unwrap();
         assert_eq!(parsed.environment.shuffle_seed, None);
+    }
+    #[test]
+    fn guest_output_is_kept_even_when_invalid() {
+        let mut o = Observation::new("fsync-4k", 0, 1);
+        assert!(o.apply_guest_output("noise\nDISKSCOPE_JSON={\"elapsed_ms\":2.5,\"operations\":1,\"bytes\":4096,\"valid\":false}\n"));
+        assert_eq!(o.work_ms, Some(2.5));
+        assert!(!o.ok);
+        assert!(o.error.is_some());
+        assert!(!Observation::new("noop", 0, 1).apply_guest_output("no marker here"));
+    }
+    #[test]
+    fn guest_source_knows_every_task() {
+        for task in TASKS { assert!(WORKER_SCRIPT.contains(&format!("\"{task}\"")), "{task} missing from guest"); }
     }
     #[test]
     fn tail_keeps_end() {

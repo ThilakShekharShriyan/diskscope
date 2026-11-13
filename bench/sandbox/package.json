@@ -1,0 +1,7 @@
+{
+  "name": "diskscope-sandbox-bench",
+  "private": true,
+  "type": "module",
+  "description": "Benchmarks DiskScope guest tasks inside a warm, persistent Archil sandbox",
+  "dependencies": { "disk": "1.12.1" }
+}

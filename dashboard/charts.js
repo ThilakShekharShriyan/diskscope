@@ -66,7 +66,8 @@
     ci.level = 1 - 2 * binomCdfHalf(k - 1, n);
     return ci;
   }
-  /** Ratio of medians a/b with an independent two-sample percentile bootstrap 95% CI. */
+  /** Ratio of medians a/b with an independent two-sample percentile bootstrap CI (nominal 95%). At n of
+   *  5–15 per side the bootstrap of a median is coarse, so the interval is labelled approximate (≈95%). */
   function ratioCI(a, b, seed) {
     // Sort first: the resampling stream then depends only on the values, not on input-file order.
     a = [...a].sort((x, y) => x - y); b = [...b].sort((x, y) => x - y);
@@ -77,7 +78,7 @@
     out.sort();
     return { point, ci: [qSorted(out, 0.025), qSorted(out, 0.975)] };
   }
-  function summarize(xs, seed) {
+  function summarize(xs) {
     const v = xs.filter(Number.isFinite);
     return { n: v.length, median: median(v), p90: quantile(v, 0.9), min: Math.min(...v), max: Math.max(...v), ci: medianCI(v) };
   }
@@ -98,8 +99,9 @@
   const taskRank = t => { const i = TASK_ORDER.indexOf(t); return i < 0 ? 99 : i; };
   // Color follows the entity: fixed slots for known backends, later ones in order of first sight.
   function seriesMap(backends) {
-    const m = new Map([['archil', 1], ['local', 2]]);
-    let next = 3;
+    // archil exec = near-black, local baseline = light grey, archil sandbox = mid grey.
+    const m = new Map([['archil', 1], ['local', 2], ['archil-sandbox', 3]]);
+    let next = 4;
     for (const b of backends) if (!m.has(b)) m.set(b, Math.min(8, next++));
     return m;
   }
@@ -111,11 +113,7 @@
     })));
     return rows;
   }
-  const measured = rows => rows.filter(r => r.ok && r.task !== 'image-warmup');
-  function metricValue(r, metric) {
-    const v = r[metric];
-    return typeof v === 'number' && Number.isFinite(v) ? v : null;
-  }
+  const measured = rows => rows.filter(r => r.ok && r.task !== 'image-warmup' && r.task !== 'sandbox-boot');
 
   // ---------- scales ----------
   const NICE = [1, 2, 5];
@@ -208,7 +206,7 @@
       s += `<text x="8" y="${y + bandH / 2 + (g.sub ? -2 : 4)}" class="ds-label">${esc(g.label)}</text>`;
       if (g.sub) s += `<text x="8" y="${y + bandH / 2 + 12}" class="ds-sub">${esc(g.sub)}</text>`;
       lanes.forEach(l => {
-        const cy = y + laneH / 2, vals = l.values.map(d => d.v), st = summarize(vals, g.label + l.name);
+        const cy = y + laneH / 2, vals = l.values.map(d => d.v), st = summarize(vals);
         if (lanes.length > 1) s += `<text x="${left - 10}" y="${cy + 4}" class="ds-muted" text-anchor="end">${esc(l.name)}</text>`;
         if (st.ci) s += `<rect x="${x(st.ci[0]).toFixed(1)}" y="${cy - 7}" width="${Math.max(3, x(st.ci[1]) - x(st.ci[0])).toFixed(1)}" height="14" rx="7" class="ci-s${l.slot}"/>`;
         l.values.forEach((d, i) => {
@@ -216,7 +214,7 @@
           s += `<circle cx="${cx}" cy="${jy}" r="4" class="f-s${l.slot} ds-ring ds-dot"/><circle cx="${cx}" cy="${jy}" r="11" class="ds-hit"${tip(d.tip)}/>`;
         });
         const mx = x(st.median).toFixed(1);
-        s += `<line x1="${mx}" x2="${mx}" y1="${cy - 10}" y2="${cy + 10}" class="ds-median"/>`;
+        s += `<line x1="${mx}" x2="${mx}" y1="${cy - 11}" y2="${cy + 11}" class="ds-median-halo"/><line x1="${mx}" x2="${mx}" y1="${cy - 10}" y2="${cy + 10}" class="ds-median"/>`;
         s += `<rect x="${left}" y="${y + 2}" width="${W - right - left}" height="${laneH - 4}" class="ds-hit ds-lanehit"${tip([fmt(st.median) + ' median', `${g.label} · ${l.name}`, st.ci ? `${(st.ci.level * 100).toFixed(1)}% CI ${fmt(st.ci[0])} – ${fmt(st.ci[1])}` : 'n < 5: no interval', `n=${st.n} · min ${fmt(st.min)} · max ${fmt(st.max)}`])}/>`;
         s += `<text x="${W - right + 12}" y="${cy + 4}" class="ds-value">${esc(fmt(st.median))}</text>`;
         y += laneH;
@@ -260,7 +258,7 @@
     const left = 214, right = 92, top = 44, rowH = 34, barH = 18, h = top + rows.length * rowH + 30;
     const max = Math.max(...rows.map(r => r.total));
     const x = linearScale([0, max * 1.04], [left, W - right]);
-    const parts = [['queue', 'f-phase-q', 'Queue · VM · mount'], ['startup', 'f-phase-s', 'Start-up · setup'], ['work', 'f-phase-w', 'Measured work'], ['other', 'f-phase-o', 'Network · API']];
+    const parts = [['queue', 'f-phase-q', 'Queue · VM · mount'], ['startup', 'f-phase-s', 'Start-up · commit'], ['work', 'f-phase-w', 'Measured work'], ['other', 'f-phase-o', 'Network · API']];
     let s = open(h, title) + legend(parts.map(p => ({ label: p[2], cls: p[1] })), left, 18);
     s += xAxis(x, top - 6, top + rows.length * rowH - 6, fmtMs);
     rows.forEach((r, i) => {
@@ -345,7 +343,7 @@
 
   root.DiskScopeCharts = {
     esc, fmtMs, fmtNum, fmtX, quantile, median, medianCI, ratioCI, summarize,
-    TASK_ORDER, TASK_INFO, taskRank, seriesMap, flatten, measured, metricValue,
+    TASK_ORDER, TASK_INFO, taskRank, seriesMap, flatten, measured,
     stripPlot, ecdf, anatomy, dotCI, timeline,
   };
   if (typeof module === 'object' && module.exports) module.exports = root.DiskScopeCharts;

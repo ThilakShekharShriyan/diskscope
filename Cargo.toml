@@ -1,6 +1,6 @@
 [package]
 name = "diskscope"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "A safe, reproducible Rust+Archil serverless and filesystem benchmark lab"
 license = "MIT"
