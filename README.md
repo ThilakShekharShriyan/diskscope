@@ -30,7 +30,7 @@ An agent's tool call increasingly runs as a fresh microVM attached to a shared d
 
 **What made it faster**
 
-1. **Use the default exec image.** It is served from Archil's pool of ready microVMs: **33 ms** queue vs **143 ms** for any custom `baseImage`, which boots on demand. It already ships Python 3.10.
+1. **Use the default exec image.** It is served from Archil's pool of ready microVMs: a steady **30–33 ms** queue, vs **~143 ms** for a custom `baseImage` (which boots on demand, and in a later session was sometimes **1.3–3.2 s**). It already ships Python 3.10.
 2. **Keep the guest's cold start cheap.** Every exec is a fresh VM, so Python's stdlib is read from a cold cache: importing `sqlite3`, `hashlib`, `pathlib` and `json` up front cost ~135 ms. Importing per task and running `python3 -S` cut Archil-reported execute time from 107 ms to 38 ms.
 3. **For many calls, keep one process warm.** A long-lived worker inside a sandbox, fed over a single connection, answers a no-op in **77 ms** (about one network round-trip) and a durable 4 KiB write in **86 ms**, after a one-time ~2 s boot. Calling `sandbox.exec()` per task is the slowest option (434 ms), likely because each call sets up a new process connection. (The sandbox ran 1 vCPU / 2 GiB; exec defaults to 2 vCPU / 4 GiB.)
 
@@ -70,7 +70,7 @@ Reported to Archil with minimal curl repros in [`ARCHIL-FINDINGS.md`](ARCHIL-FIN
 
 1. **Default execs can't delete what earlier execs created — and report `EROFS`.** This is Archil's delegation model: the single-disk exec mount takes no checkout. Mounting through `POST /api/exec` with `checkoutPaths` or `conditional: true` works. DiskScope now removes its scratch directory that way after every run.
 2. **SQLite's default journal breaks across execs.** A database created in one exec fails the next exec's commit (`disk I/O error`) and is then unreadable from a default exec. Check out the directory, or use `PRAGMA journal_mode=TRUNCATE`.
-3. **Costs worth documenting:** ~70 ms commit per writing exec; ~430 ms per `sandbox.exec()` call; ~110 ms extra queue for any custom image; the default image already ships Python 3.10.
+3. **Costs worth documenting:** ~70 ms commit per writing exec; ~430 ms per `sandbox.exec()` call; ~110 ms extra queue for a custom image, with occasional 1.3–3.2 s slow starts; the default image already ships Python 3.10.
 
 ## Methodology
 

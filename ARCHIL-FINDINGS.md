@@ -3,7 +3,8 @@
 Behaviours observed while benchmarking Archil serverless exec and sandboxes with [DiskScope](README.md),
 on 2026-11-13 in `aws-us-east-1`, using `POST /api/disks/{id}/exec` (default image unless noted),
 `POST /api/exec`, and the `disk@1.12.1` SDK for sandboxes. Each item says whether it is **verified by a
-repro** or **inferred**.
+repro** or **inferred**. Every code block below was re-run verbatim on 2026-11-13 and produced the output
+shown.
 
 All repros need only an API key and a disk ID:
 
@@ -13,6 +14,10 @@ HOST=https://control.green.us-east-1.aws.prod.archil.com
 x() { jq -n --arg c "$1" '{command:$c}' | curl -sS -X POST "$HOST/api/disks/$ARCHIL_DISK_ID/exec" \
         -H "Authorization: Bearer $ARCHIL_API_KEY" -H 'Content-Type: application/json' -d @- \
       | jq -r '.data | "exit=\(.exitCode) executeMs=\(.timing.executeMs)\n\(.stdout)\(.stderr)"'; }
+# Multi-disk exec with mount options, e.g. y 'rm …' '{"conditional":true}' (disk mounted at /mnt/archil/d)
+y() { jq -n --arg c "$1" --arg d "$ARCHIL_DISK_ID" --argjson m "$2" '{disks:{d:({disk:$d}+$m)},command:$c}' \
+      | curl -sS -X POST "$HOST/api/exec" -H "Authorization: Bearer $ARCHIL_API_KEY" -H 'Content-Type: application/json' -d @- \
+      | jq -r '.data | "exit=\(.exitCode)\n\(.stdout)\(.stderr)"'; }
 ```
 
 ---
@@ -33,14 +38,24 @@ x 'touch /mnt/archil/archil-repro/1/b && rm /mnt/archil/archil-repro/1/b'       
 
 **Cause (verified):** the delegation model. The default exec mount takes no delegation checkout, so an
 exec can only remove entries under directories it created itself. Through `POST /api/exec` the same delete
-succeeds with either `"checkoutPaths": ["archil-repro/1"]` or `"conditional": true` on the mount.
-`listDelegations()` showed no orphaned delegations, so nothing was stuck.
+succeeds with a checkout or a conditional mount. `listDelegations()` showed no orphaned delegations, so
+nothing was stuck.
+
+```bash
+y 'rm /mnt/archil/d/archil-repro/1/a'                       '{}'                                   # -> Read-only file system
+y 'rm /mnt/archil/d/archil-repro/1/a && echo removed'       '{"checkoutPaths":["archil-repro/1"]}' # -> removed
+y 'rm /mnt/archil/d/archil-repro/1/b && echo removed'       '{"conditional":true}'                 # -> removed
+```
+
+The single-disk endpoint accepts `"checkoutPaths"` in its body with HTTP 200 but **silently ignores it**
+(the delete still fails with `EROFS`), which makes the option easy to believe is applied.
 
 **What would help:**
 - A clearer error than `EROFS` for "no delegation on this directory" — `EROFS` sent us looking at fsync
   and read-only mounts first.
 - Saying in the serverless-exec docs that deletes (and SQLite, see #2) need `checkoutPaths` or
   `conditional`, and that the single-disk `/api/disks/{id}/exec` body has no mount options at all.
+- Rejecting unknown body fields (HTTP 400) rather than ignoring them.
 - Our earlier runs left 188 directories that default execs could not remove; one `conditional` exec
   through `/api/exec` removed them.
 
@@ -58,15 +73,22 @@ x 'python3 -c "import sqlite3;d=sqlite3.connect(\"file:/mnt/archil/archil-repro/
 ```
 
 The rollback journal is deleted on every commit, which needs a delegation on the directory. Journal modes
-in a directory from an earlier exec: `DELETE` ✗ · `WAL` ✗ · `TRUNCATE` ✓ · `PERSIST` ✓ · `MEMORY` ✓. With
-`"checkoutPaths": ["<db dir>"]` on `/api/exec`, a second exec commits normally (verified). A short "SQLite
-across execs" note — check out the directory, or use `journal_mode=TRUNCATE` — would prevent data that
-looks lost.
+in a directory from an earlier exec: `DELETE` ✗ · `WAL` ✗ · `TRUNCATE` ✓ · `PERSIST` ✓ · `MEMORY` ✓. A
+checkout of the database's directory fixes it, and even **recovers** the database left broken above (the
+hot journal rolls back and the next commit succeeds):
+
+```bash
+y 'python3 -c "import sqlite3;d=sqlite3.connect(\"/mnt/archil/d/archil-repro/2/app.db\");d.execute(\"insert into t values (3)\");d.commit();print(\"rows\",d.execute(\"select count(*) from t\").fetchone()[0])"' '{"checkoutPaths":["archil-repro/2"]}'
+#  -> rows 2
+```
+
+A short "SQLite across execs" note — check out the directory, or use `journal_mode=TRUNCATE` — would prevent
+data that looks lost.
 
 ## 3. Performance — a command that writes pays ~70 ms more in `executeMs`
 
-**Verified** with shell-only commands (default image, n = 6 each): `true` has `executeMs` of **3–4 ms**;
-`echo x > /mnt/archil/<file>` has **60–92 ms** (median ≈ 76 ms). That matches the documented commit at exit
+**Verified twice** with shell-only commands (default image, n = 6 each, two sessions): `true` has
+`executeMs` of **3–4 ms**; `echo x > /mnt/archil/<file>` has **56–92 ms** (median ≈ 77 ms). That matches the documented commit at exit
 ("command output may not have been durably committed"). Inside a persistent sandbox, a 4 KiB write + fsync
 completes end-to-end in **86 ms** including the network. Documenting this cost — and whether it scales with
 the amount written — would help users choose between exec and sandboxes.
@@ -83,7 +105,9 @@ sandboxes the fastest option rather than the slowest.
 ## 5. Docs — gaps that cost us time
 
 - **Custom image cost.** The docs say a non-default image "boots on demand" with higher `queueMs`, without a
-  number. Measured: **~143 ms** for `python:3.13-slim` vs **~33 ms** for the default image.
+  number. Default image: **30–33 ms**, every time (n = 10+). `python:3.13-slim`: **134–161 ms** across 46
+  back-to-back calls in one run, but an hour later it was **bimodal** — about 140 ms or **1.3–3.2 s**
+  (8 of 13 calls in the slow mode). Worth documenting both the typical cost and the slow mode.
 - **Default image contents** aren't listed. It is Ubuntu 22.04 with **Python 3.10.12**, so many Python
   workloads don't need `baseImage` at all.
 - **Exclusive sandbox mounts.** A plain sandbox mount takes the disk's exclusive root delegation (from the

@@ -100,7 +100,7 @@
         <div><h3>Default execs can't delete earlier files</h3><p>The single-disk exec mount holds no delegation checkout, so removing anything an earlier exec created fails — reported as a misleading <code>EROFS</code>. <code>checkoutPaths</code> or a <code>conditional</code> mount fixes it.</p></div>
         <div><h3>SQLite breaks across execs</h3><p>A database created in one exec gets <code>disk I/O error</code> on the next exec's commit and is then unreadable from a default exec. Check out the directory, or use <code>journal_mode=TRUNCATE</code>.</p></div>
         <div><h3>Writes pay a commit at exit</h3><p>A shell command that writes one file has ~70 ms more <em>execute</em> time than <code>true</code> (76 ms vs 4 ms). A persistent sandbox worker avoids it.</p></div>
-        <div><h3>The image choice is a 4.5× queue difference</h3><p>Default image: ~32 ms queue from the warm pool. <code>python:3.13-slim</code>: ~145 ms, booted on demand. The default image already ships Python 3.10.</p></div>
+        <div><h3>The image choice is a 4.5× queue difference</h3><p>Default image: a steady 30–33 ms queue from the warm pool. <code>python:3.13-slim</code>: ~143 ms, booted on demand — and sometimes 1.3–3.2 s. The default image already ships Python 3.10.</p></div>
       </div>
     </section>
 
