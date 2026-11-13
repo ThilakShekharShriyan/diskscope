@@ -21,7 +21,7 @@ x() { jq -n --arg c "$1" '{command:$c}' | curl -sS -X POST "$HOST/api/disks/$ARC
 |---|---|---|
 | 1 | Shared-mode execs can't rename, `chmod` or delete another exec's entries; `archil checkout` inside the command fixes it | Documented in part; gaps |
 | 2 | SQLite fails in any directory an earlier exec created — even creating a new database | Consequence of #1, undocumented |
-| 3 | The ~30 s delay for new files is anchored to the reader's failed lookup, and `--readdir-expiry 0` doesn't shorten it | ~30 s documented in a guide; mechanism and knob are new |
+| 3 | With `--readdir-expiry 0`, `listdir` shows a new file while `stat`/`open` still say it doesn't exist; the ~30 s delay runs from the failed lookup | ~30 s documented in a guide; knob behaviour contradicts its help |
 | 4 | A command that writes pays ~70 ms more `executeMs` | Measured |
 | 5 | `sandbox.exec()` is slower per call than a serverless exec | Measured; cause inferred |
 | 6 | Docs gaps: custom-image queue time, default image contents, exclusive sandbox mounts | Docs |
@@ -90,7 +90,7 @@ Journal modes in a directory from an earlier exec, without a checkout: `DELETE` 
 `PERSIST` ✓ · `MEMORY` ✓. A short "SQLite across execs" note — run `archil checkout` on the database's
 directory, or use `journal_mode=TRUNCATE` — would prevent data that looks lost.
 
-## 3. The ~30 s new-file delay comes from the reader's failed lookup, and `--readdir-expiry 0` doesn't shorten it
+## 3. `--readdir-expiry 0` refreshes listings but not failed lookups; the ~30 s delay runs from the lookup
 
 **What the docs say.** The guide [What Archil does](https://archil.com/guides/storage-for-agents/what-archil-does)
 says "A new file takes about 30 s to appear on another machine by default" and recommends running
@@ -107,7 +107,7 @@ path has its own directory, so probes can't refresh each other's caches.
 | Access path in the reader | Change first seen, counted from when the reader **looked** | Stale after the write |
 |---|---|---|
 | `open()` / `stat()` of a new file, after looking it up once | **30.00–30.02 s, every trial** | 9.5–26.7 s |
-| …with `archil set-cache-expiry --readdir-expiry 0` on that directory first | 30.00–30.02 s — **no effect** | 9.5–26.7 s |
+| …with `archil set-cache-expiry --readdir-expiry 0` on that directory first (polling `open()` only) | 30.00–30.02 s — **no effect** | 9.5–26.7 s |
 | `listdir()`, non-empty directory | not within 90 s (6/6) — consistent with the 5-minute listing cache | > 70 s |
 | `listdir()`, empty directory never looked up in | immediately | ≈ 0 s |
 | re-`open()` of an overwritten file | immediately — "open rechecks" ✓ | ≈ 0 s |
@@ -116,7 +116,22 @@ path has its own directory, so probes can't refresh each other's caches.
 The new-file window ends 30 s after the **failed lookup**, regardless of when the file was written (writer at
 +3, +12 and +20 s; seen at +30.0 s every time). So `open()` rechecks files that exist, but a name that was
 missing stays missing for 30 s; the directory's listing is stale too once a lookup in it has failed.
-`archil invalidate-cache /mnt/archil` fixes it in about 7 ms. **Inferred:** a constant 30.00 s that
+`archil invalidate-cache /mnt/archil` fixes it in about 7 ms.
+
+**`--readdir-expiry 0` contradicts its help text** (verified 4/4, directory-level and mount-wide alike). With it
+set, the listing is fresh but a lookup of the same name at the same moment still says it doesn't exist; a
+`listdir` then appears to refresh the entry:
+
+```bash
+x 'mkdir -p /mnt/archil/archil-repro/4 && echo created'                                      # exec 1
+x 'archil set-cache-expiry -q --readdir-expiry 0 /mnt/archil && python3 -c "import os,time;f=\"/mnt/archil/archil-repro/4/x\";print(\"t+0 \",os.path.exists(f));time.sleep(12);print(\"t+12\",os.path.exists(f),os.listdir(\"/mnt/archil/archil-repro/4\"),os.path.exists(f))"' &   # exec 2
+sleep 5; x 'echo hi > /mnt/archil/archil-repro/4/x && echo written'                          # exec 3
+wait
+#  exec 2 -> t+0  False
+#            t+12 False ['x'] True          (exists, listing, exists again — in one print)
+```
+
+**Inferred:** a constant 30.00 s that
 `--readdir-expiry 0` doesn't change looks like a kernel FUSE negative-entry timeout rather than Archil's own
 cache.
 
@@ -132,8 +147,8 @@ wait
 
 **What this adds to the guide's "about 30 s":** the window is exactly 30 s from the reader's *failed lookup*, not
 from the write — a reader that never looked sees the file at once, and one that looked just before the write
-waits the full 30 s; the directory's listing goes stale too; and the documented per-directory knob doesn't
-shorten it.
+waits the full 30 s; the directory's listing goes stale too; and `--readdir-expiry 0` fixes the listing but not
+the lookup, so the two disagree.
 
 **What would help:** make `--readdir-expiry 0` cover absent-name lookups as its help text says (or correct the
 help text), and note failed-lookup caching on the Consistency and Caching reference pages next to "opening a

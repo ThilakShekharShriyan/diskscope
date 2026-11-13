@@ -70,7 +70,7 @@ Reported to Archil with minimal curl repros in [`ARCHIL-FINDINGS.md`](ARCHIL-FIN
 
 1. **Shared-mode execs can't rename, `chmod` or delete another exec's files (`EROFS`).** Documented for deletes; renames — including write-temp-then-rename — aren't mentioned. Running `archil checkout <dir>` inside the command fixes it in ~14 ms; DiskScope cleans up with a `conditional` mount.
 2. **SQLite fails in any directory an earlier exec created** — even creating a database — and a failed commit leaves it unreadable. `archil checkout` fixes and recovers it; `journal_mode=TRUNCATE` avoids it.
-3. **The documented ~30 s new-file delay is anchored to the reader's failed lookup**, not the write: `open()` and `stat()` return `ENOENT` until exactly 30 s after the lookup. `--readdir-expiry 0` doesn't shorten it despite its help text; `archil invalidate-cache` (Archil's documented fix) does.
+3. **The documented ~30 s new-file delay is anchored to the reader's failed lookup**, not the write: `open()` and `stat()` return `ENOENT` until exactly 30 s after the lookup. With `--readdir-expiry 0`, `listdir` shows the file while `stat` still says it's missing, despite the setting's help text; `archil invalidate-cache` (Archil's documented fix) works.
 4. **Costs worth documenting:** ~70 ms commit per writing exec; ~430 ms per `sandbox.exec()` call; ~110 ms extra queue for a custom image, with occasional 1.3–3.2 s slow starts; the default image already ships Python 3.10.
 
 ## Phase 2 · BranchLab: state correctness across microVMs
