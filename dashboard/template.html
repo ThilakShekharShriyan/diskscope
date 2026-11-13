@@ -104,7 +104,7 @@
     </section>
 
     <section class="panel" id="profile">
-      <div class="ph"><div><div class="eyebrow">10 · CPU profile</div><h2>Rust flamegraph</h2><p>Sampled CPU stacks of the Rust harness (<code>cargo flamegraph -- profile-workload</code>). This profiles our code, not Archil's control plane.</p></div></div>
+      <div class="ph"><div><div class="eyebrow">10 · CPU profile</div><h2>Rust flamegraph</h2><p>Sampled CPU stacks of the Rust harness's profiling workload (<code>./scripts/flamegraph.sh</code>): hash mixing, quantile statistics, report JSON round-trips and job shuffling. Click a frame to zoom. This profiles our code, not Archil's control plane.</p></div></div>
       <div class="flamebox" id="flamebox"><span id="flameEmpty">No flamegraph committed yet. <label for="flameInput" style="color:var(--s1);cursor:pointer">Open a real flamegraph.svg</label> — we never render synthetic profiles.</span><object id="flameObject" type="image/svg+xml" aria-label="Rust CPU flamegraph" hidden></object><input type="file" id="flameInput" accept=".svg,image/svg+xml"/></div>
     </section>
   </main>

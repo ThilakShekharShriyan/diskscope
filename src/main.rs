@@ -144,14 +144,79 @@ fn mix_accumulator(state: u64, step: u64) -> u64 {
     avalanche(state.wrapping_add(step).rotate_left(13))
 }
 
-fn profile_workload(iterations: u64) {
-    let started = Instant::now();
+/// Phase 1: integer mixing (the hashing kernel used for seeds/jitter).
+#[inline(never)]
+fn phase_mix(iterations: u64) -> u64 {
     let mut acc = 0xDEADBEEFu64;
     for step in 0..iterations {
-        acc = mix_accumulator(acc, step);
-        std::hint::black_box(acc);
+        acc = mix_accumulator(std::hint::black_box(acc), step);
     }
-    println!("Rust profile workload: iterations={iterations} checksum={acc:x} elapsed={:.3}s", started.elapsed().as_secs_f64());
+    acc
+}
+
+/// Phase 2: the statistics path — sort latency samples and take quantiles.
+#[inline(never)]
+fn phase_quantiles(rounds: u64) -> f64 {
+    let mut total = 0.0;
+    let mut samples = vec![0.0f64; 4096];
+    for r in 0..rounds {
+        for (i, v) in samples.iter_mut().enumerate() {
+            *v = (avalanche(r ^ i as u64) % 1_000_000) as f64 / 1000.0;
+        }
+        for p in [0.5, 0.9, 0.95, 0.99] {
+            total += model::percentile(std::hint::black_box(&samples), p).unwrap_or(0.0);
+        }
+    }
+    total
+}
+
+/// Phase 3: the report path — serialize and parse a RunReport the size of a real run.
+#[inline(never)]
+fn phase_json(rounds: u64) -> usize {
+    let mut report = RunReport::empty("archil", "profile".into(), 4, 10);
+    for i in 0..256u64 {
+        report.observations.push(Observation {
+            task: TASKS[(i % TASKS.len() as u64) as usize].into(), trial: i as usize, fanout: 1, ok: true,
+            client_wall_ms: (avalanche(i) % 1000) as f64, remote_total_ms: Some(250.0), remote_queue_ms: Some(140.0),
+            remote_execute_ms: Some(110.0), work_ms: Some(1.5), operations: Some(1), bytes: Some(4096), error: None,
+            cleanup_error: None, started_ms: Some(i as f64), parallel: Some(4),
+        });
+    }
+    let mut bytes = 0;
+    for _ in 0..rounds {
+        let text = serde_json::to_string(std::hint::black_box(&report)).unwrap_or_default();
+        let back: RunReport = serde_json::from_str(&text).expect("round-trip");
+        bytes += text.len() + back.observations.len();
+    }
+    bytes
+}
+
+/// Phase 4: the scheduler path — deterministic shuffles of a job list.
+#[inline(never)]
+fn phase_shuffle(rounds: u64) -> usize {
+    let mut jobs: Vec<(usize, usize)> = (0..TASKS.len()).flat_map(|t| (0..64).map(move |i| (t, i))).collect();
+    let mut checksum = 0;
+    for r in 0..rounds {
+        model::shuffle(&mut jobs, r);
+        checksum ^= std::hint::black_box(jobs[0].0 + jobs[1].1);
+    }
+    checksum
+}
+
+/// CPU-only workload with distinct, non-inlined phases so a sampled flamegraph shows where the
+/// harness's own code spends time. `iterations` scales all phases together.
+fn profile_workload(iterations: u64) {
+    let started = Instant::now();
+    let scale = iterations / 250_000;
+    let mix = phase_mix(iterations);
+    let q = phase_quantiles(scale * 2);
+    let json = phase_json(scale / 2);
+    let shuf = phase_shuffle(scale * 160);
+    println!(
+        "Rust profile workload: iterations={iterations} checksum={:x} elapsed={:.3}s",
+        mix ^ q.to_bits() ^ json as u64 ^ shuf as u64,
+        started.elapsed().as_secs_f64()
+    );
 }
 
 fn main() {

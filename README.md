@@ -117,7 +117,13 @@ node scripts/readme-charts.mjs results/*.json      # writes docs/assets/*.svg, p
 
 ### Flamegraphs
 
-`cargo install flamegraph && ./scripts/flamegraph.sh` samples the Rust harness's dedicated hot loop. Commit the result as `docs/flamegraph.svg` and the dashboard loads it automatically. This profiles our code, not Archil's control plane.
+```bash
+cargo install inferno --locked      # macOS without full Xcode: uses the built-in `sample` profiler, no root
+cargo install flamegraph --locked   # Linux (perf) or macOS with Xcode's xctrace
+./scripts/flamegraph.sh && cp flamegraph.svg docs/flamegraph.svg
+```
+
+`--locked` matters: the newest flamegraph dependencies require Rust ≥ 1.91. The profiled workload (`diskscope profile-workload`) runs four non-inlined phases of the harness's own code paths — hash mixing, quantile statistics, report JSON round-trips, job shuffling — and the dashboard embeds the committed `docs/flamegraph.svg` (click frames to zoom). It profiles our code, not Archil's control plane.
 
 ## Project layout
 

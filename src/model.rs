@@ -110,7 +110,6 @@ pub fn shuffle<T>(items: &mut [T], seed: u64) {
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))] // used by tests; dashboard computes its own quantiles in JS
 pub fn percentile(values: &[f64], p: f64) -> Option<f64> {
     if values.is_empty() { return None; }
     let mut xs = values.to_vec();

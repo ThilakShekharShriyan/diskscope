@@ -141,7 +141,9 @@ tr:hover td { background: color-mix(in srgb, var(--ink) 3%, transparent); }
 
 /* flamegraph */
 .flamebox { border: 1px dashed var(--axis); border-radius: 12px; min-height: 140px; display: grid; place-items: center; padding: 16px; text-align: center; color: var(--muted); font-size: 13.5px; }
-.flamebox object { width: 100%; min-height: 420px; border: 0; }
+.flamebox object { width: 100%; min-height: 200px; border: 0; display: block; }
+.flamebox object.probing { visibility: hidden; min-height: 0; height: 0; position: absolute; }
+.flamebox { position: relative; }
 input[type=file] { display: none; }
 
 /* tooltip */
@@ -262,7 +264,7 @@ footer { color: var(--muted); font-size: 12.5px; padding: 30px 0 60px; display: 
     </section>
 
     <section class="panel" id="profile">
-      <div class="ph"><div><div class="eyebrow">10 · CPU profile</div><h2>Rust flamegraph</h2><p>Sampled CPU stacks of the Rust harness (<code>cargo flamegraph -- profile-workload</code>). This profiles our code, not Archil's control plane.</p></div></div>
+      <div class="ph"><div><div class="eyebrow">10 · CPU profile</div><h2>Rust flamegraph</h2><p>Sampled CPU stacks of the Rust harness's profiling workload (<code>./scripts/flamegraph.sh</code>): hash mixing, quantile statistics, report JSON round-trips and job shuffling. Click a frame to zoom. This profiles our code, not Archil's control plane.</p></div></div>
       <div class="flamebox" id="flamebox"><span id="flameEmpty">No flamegraph committed yet. <label for="flameInput" style="color:var(--s1);cursor:pointer">Open a real flamegraph.svg</label> — we never render synthetic profiles.</span><object id="flameObject" type="image/svg+xml" aria-label="Rust CPU flamegraph" hidden></object><input type="file" id="flameInput" accept=".svg,image/svg+xml"/></div>
     </section>
   </main>
@@ -957,7 +959,21 @@ footer { color: var(--muted); font-size: 12.5px; padding: 30px 0 60px; display: 
   // ---- flamegraph: auto-load a committed docs/flamegraph.svg, or open one locally ----
   function showFlame(url) { $('flameObject').data = url; $('flameObject').hidden = false; $('flameEmpty').hidden = true; }
   $('flameInput').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f && /\.svg$/i.test(f.name)) showFlame(URL.createObjectURL(f)); });
-  if (location.protocol.startsWith('http')) fetch('flamegraph.svg', { method: 'HEAD' }).then(r => { if (r.ok) showFlame('flamegraph.svg'); }).catch(() => {});
+  // Probe with a collapsed (not display:none, which Chrome never loads) <object>; reveal it only if
+  // docs/flamegraph.svg actually loads as an SVG. Works on GitHub Pages and from file://.
+  (() => {
+    const probe = $('flameObject');
+    probe.hidden = false; probe.classList.add('probing');
+    probe.addEventListener('load', () => {
+      const doc = probe.contentDocument;
+      if (doc && doc.documentElement && doc.documentElement.nodeName.toLowerCase() !== 'svg') { probe.hidden = true; return; }
+      probe.classList.remove('probing'); $('flameEmpty').hidden = true;
+      const root = doc && doc.documentElement, w = root && parseFloat(root.getAttribute('width')), h = root && parseFloat(root.getAttribute('height'));
+      if (w > 0 && h > 0) { const fit = () => { probe.style.height = Math.round(probe.clientWidth * h / w) + 'px'; }; fit(); addEventListener('resize', fit); }
+    }, { once: true });
+    probe.addEventListener('error', () => { probe.hidden = true; probe.classList.remove('probing'); }, { once: true });
+    probe.data = 'flamegraph.svg';
+  })();
 
   refresh();
 })();

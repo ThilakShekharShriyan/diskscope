@@ -173,7 +173,21 @@
   // ---- flamegraph: auto-load a committed docs/flamegraph.svg, or open one locally ----
   function showFlame(url) { $('flameObject').data = url; $('flameObject').hidden = false; $('flameEmpty').hidden = true; }
   $('flameInput').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f && /\.svg$/i.test(f.name)) showFlame(URL.createObjectURL(f)); });
-  if (location.protocol.startsWith('http')) fetch('flamegraph.svg', { method: 'HEAD' }).then(r => { if (r.ok) showFlame('flamegraph.svg'); }).catch(() => {});
+  // Probe with a collapsed (not display:none, which Chrome never loads) <object>; reveal it only if
+  // docs/flamegraph.svg actually loads as an SVG. Works on GitHub Pages and from file://.
+  (() => {
+    const probe = $('flameObject');
+    probe.hidden = false; probe.classList.add('probing');
+    probe.addEventListener('load', () => {
+      const doc = probe.contentDocument;
+      if (doc && doc.documentElement && doc.documentElement.nodeName.toLowerCase() !== 'svg') { probe.hidden = true; return; }
+      probe.classList.remove('probing'); $('flameEmpty').hidden = true;
+      const root = doc && doc.documentElement, w = root && parseFloat(root.getAttribute('width')), h = root && parseFloat(root.getAttribute('height'));
+      if (w > 0 && h > 0) { const fit = () => { probe.style.height = Math.round(probe.clientWidth * h / w) + 'px'; }; fit(); addEventListener('resize', fit); }
+    }, { once: true });
+    probe.addEventListener('error', () => { probe.hidden = true; probe.classList.remove('probing'); }, { once: true });
+    probe.data = 'flamegraph.svg';
+  })();
 
   refresh();
 })();

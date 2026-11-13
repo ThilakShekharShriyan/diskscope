@@ -5,5 +5,5 @@
 .env
 .env.*
 *.perf.data
-flamegraph.svg
+/flamegraph.svg
 .DS_Store
