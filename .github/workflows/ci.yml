@@ -30,3 +30,10 @@ jobs:
         run: node scripts/readme-charts.mjs data/*.json data/archive/v0.1/2026-11-13-archil-sequential.json
       - name: Sandbox benchmark parses
         run: node --check bench/sandbox/run.mjs
+      - name: BranchLab tests
+        run: |
+          python3 -m unittest discover -s branchlab/tests -v
+          cargo clippy --manifest-path branchlab/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path branchlab/Cargo.toml
+          cargo run --release --manifest-path branchlab/Cargo.toml -- local --runs 1 --size-kib 4 --fanout 2 --output results/state-local-ci.json
+          python3 branchlab/report.py results/state-local-ci.json --output /tmp/branchlab.html

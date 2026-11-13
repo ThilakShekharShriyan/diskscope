@@ -72,6 +72,18 @@ Reported to Archil with minimal curl repros in [`ARCHIL-FINDINGS.md`](ARCHIL-FIN
 2. **SQLite's default journal breaks across execs.** A database created in one exec fails the next exec's commit (`disk I/O error`) and is then unreadable from a default exec. Check out the directory, or use `PRAGMA journal_mode=TRUNCATE`.
 3. **Costs worth documenting:** ~70 ms commit per writing exec; ~430 ms per `sandbox.exec()` call; ~110 ms extra queue for a custom image, with occasional 1.3–3.2 s slow starts; the default image already ships Python 3.10.
 
+## Phase 2 · BranchLab: state correctness across microVMs
+
+[`branchlab/`](branchlab/) asks a different question: does state written in one fresh microVM arrive intact in the next? Each step runs as its own exec — write a file with `fsync`, then verify every byte from a new VM; commit 16 SQLite transactions, then reopen read-only and run `integrity_check`; fan out parallel readers of one file; and run parallel writers to separate files, then reconcile. **First smoke run: 18/18 Archil steps passed**, with the scratch directory removed afterwards. [Correctness dashboard →](https://thilakshekharshriyan.github.io/diskscope/branchlab.html)
+
+```bash
+set -a; source .env.local; set +a        # ARCHIL_API_KEY, ARCHIL_DISK_ID, ARCHIL_REGION
+cargo run --release --manifest-path branchlab/Cargo.toml -- archil --runs 1 --size-kib 4 --fanout 2 --output results/state-archil.json
+python3 branchlab/report.py data/branchlab/*.json results/state-archil.json --output docs/branchlab.html
+```
+
+It checks fresh-execution visibility, not the directory cache of a long-lived mounted client, and it injects no failures — see the limits on the dashboard.
+
 ## Methodology
 
 Borrowed from [criterion.rs](https://bheisler.github.io/criterion.rs/book/analysis.html), [hyperfine](https://github.com/sharkdp/hyperfine), [fio](https://fio.readthedocs.io/), [ClickBench](https://github.com/ClickHouse/ClickBench) and Hoefler & Belli's [*Scientific Benchmarking of Parallel Computing Systems*](https://htor.inf.ethz.ch/publications/img/hoefler-scientific-benchmarking.pdf).
@@ -111,7 +123,8 @@ bench/sandbox/       warm-sandbox benchmark (official `disk` SDK, pinned)
 dashboard/           chart kernel, view models and page, rendered by `diskscope report`
 scripts/             README charts, flamegraph
 data/                published raw runs (v0.2); data/archive/v0.1 holds the first runs
-docs/                GitHub Pages: dashboard, README charts, flamegraph
+branchlab/           Phase 2: cross-microVM state correctness (separate crate + report)
+docs/                GitHub Pages: dashboard, BranchLab, README charts, flamegraph
 ```
 
 MIT licensed. Independent research — not affiliated with Archil.
