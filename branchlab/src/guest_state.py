@@ -52,10 +52,23 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def durable_fsync(fd):
+    """fsync that reaches stable storage. On macOS plain fsync() leaves data in the drive's cache;
+    F_FULLFSYNC flushes it, matching Archil's "durable once fsync returns" (as DiskScope does)."""
+    import fcntl
+    if hasattr(fcntl, "F_FULLFSYNC"):
+        try:
+            fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+            return
+        except OSError:
+            pass  # e.g. a filesystem that doesn't support it: fall back to fsync
+    os.fsync(fd)
+
+
 def sync_dir(p):
     fd = os.open(p, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
     try:
-        os.fsync(fd)
+        durable_fsync(fd)
     finally:
         os.close(fd)
 
@@ -65,7 +78,7 @@ def synced_write(p, data, exclusive=True):
     with open(p, "xb" if exclusive else "wb") as out:
         out.write(data)
         out.flush()
-        os.fsync(out.fileno())
+        durable_fsync(out.fileno())
     sync_dir(os.path.dirname(p))
 
 
@@ -305,6 +318,7 @@ def run(action, base, size_kib, worker, workers, param):
             # journal in a directory an earlier exec created (DELETE and WAL fail; see sem-probe).
             con.execute("PRAGMA journal_mode=TRUNCATE")
             con.execute("PRAGMA synchronous=FULL")
+            con.execute("PRAGMA fullfsync=ON")  # macOS: commits reach stable storage; no-op on Linux
             con.execute("CREATE TABLE counters (id INTEGER PRIMARY KEY, amount INTEGER NOT NULL)")
             for idx in range(16):
                 con.execute("INSERT INTO counters(id,amount) VALUES (?,?)", (idx + 1, idx))

@@ -11,7 +11,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const GUEST: &str = include_str!("guest_state.py");
 /// Archil's default image (Ubuntu 22.04, Python 3.10) comes from the warm pool: ~30 ms queue,
-/// where `python:3.13-slim` boots on demand and is sometimes 1.3–3.2 s (see ARCHIL-FINDINGS.md #5).
+/// where `python:3.13-slim` boots on demand and is sometimes 1.3–3.2 s (see ARCHIL-FINDINGS.md #7).
 const IMAGE: &str = "default";
 const MARKER: &str = "BRANCHLAB_JSON=";
 
@@ -229,7 +229,7 @@ fn request(backend: &Backend, action: &str, base: &str, size_kib: usize, worker:
         Backend::Archil { client, base_url, key, disk_id } => {
             // Arguments are fixed or validated. No user-provided shell commands.
             // A default single-disk exec holds no delegation checkout, so it cannot unlink entries in
-            // directories an earlier exec created (EROFS; ARCHIL-FINDINGS.md #1). Cleanup therefore
+            // directories an earlier exec created (EROFS; ARCHIL-FINDINGS.md #2). Cleanup therefore
             // runs through the multi-disk endpoint with a conditional mount at /mnt/archil/d.
             let (url, body) = if action.starts_with("cleanup") {
                 let mounted = base.replacen("/mnt/archil/", "/mnt/archil/d/", 1);

@@ -58,8 +58,8 @@ The report is a separate page (`docs/branchlab.html`); don't feed these JSON fil
 ### Archil-specific choices
 
 - **Default image**, not `python:3.13-slim`: warm-pool queue of ~30 ms versus an on-demand boot that is sometimes 1.3–3.2 s.
-- **Cleanup through `POST /api/exec` with a `conditional` mount.** A default exec can't unlink entries in directories an earlier exec created (`EROFS`; ARCHIL-FINDINGS.md #1), so a plain `rmtree` would leave the scratch directory behind.
-- **SQLite with `journal_mode=TRUNCATE`.** `DELETE` (the default) and `WAL` fail across execs for the same reason (ARCHIL-FINDINGS.md #2).
+- **Cleanup through `POST /api/exec` with a `conditional` mount.** A default exec can't unlink entries in directories an earlier exec created (`EROFS`; ARCHIL-FINDINGS.md #2), so a plain `rmtree` would leave the scratch directory behind.
+- **SQLite with `journal_mode=TRUNCATE`.** `DELETE` (the default) and `WAL` fail across execs for the same reason (ARCHIL-FINDINGS.md #3).
 
 ## Interpretation
 

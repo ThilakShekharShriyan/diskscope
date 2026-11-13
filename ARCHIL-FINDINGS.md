@@ -19,16 +19,46 @@ x() { jq -n --arg c "$1" '{command:$c}' | curl -sS -X POST "$HOST/api/disks/$ARC
 
 | # | Finding | Kind |
 |---|---|---|
-| 1 | Shared-mode execs can't rename, `chmod` or delete another exec's entries; `archil checkout` inside the command fixes it | Documented in part; gaps |
-| 2 | SQLite fails in any directory an earlier exec created — even creating a new database | Consequence of #1, undocumented |
-| 3 | With `--readdir-expiry 0`, `listdir` shows a new file while `stat`/`open` still say it doesn't exist; the ~30 s delay runs from the failed lookup | ~30 s documented in a guide; knob behaviour contradicts its help |
-| 4 | A command that writes pays ~70 ms more `executeMs` | Measured |
-| 5 | `sandbox.exec()` is slower per call than a serverless exec | Measured; cause inferred |
-| 6 | Docs gaps: custom-image queue time, default image contents, exclusive sandbox mounts | Docs |
+| 1 | Concurrent `open(O_CREAT\|O_TRUNC)` of the same new file fails with `EEXIST` in all but one writer | **Bug: violates POSIX** |
+| 2 | Shared-mode execs can't rename, `chmod` or delete another exec's entries; `archil checkout` inside the command fixes it | Documented in part; gaps |
+| 3 | SQLite fails in any directory an earlier exec created — even creating a new database | Consequence of #2, undocumented |
+| 4 | With `--readdir-expiry 0`, `listdir` shows a new file while `stat`/`open` still say it doesn't exist; the ~30 s delay runs from the failed lookup | ~30 s documented in a guide; knob behaviour contradicts its help |
+| 5 | A command that writes pays ~70 ms more `executeMs` | Measured |
+| 6 | `sandbox.exec()` is slower per call than a serverless exec | Measured; cause inferred |
+| 7 | Docs gaps: custom-image queue time, default image contents, exclusive sandbox mounts | Docs |
 
 ---
 
-## 1. Shared-mode execs can't rename, `chmod` or delete another exec's entries
+## 1. Concurrent creates of the same file fail with `EEXIST` — a POSIX violation
+
+**Verified** (6/6 trials, default exec and `conditional` mount alike; 16 of 24 concurrent writers failed).
+When several execs open the same not-yet-existing file with `O_CREAT|O_TRUNC` at the same time — what
+`echo x > f` and Python's `open(f, "w")` do — one succeeds and the others fail with
+`EEXIST: File exists`. POSIX only allows `EEXIST` with `O_EXCL`; without it, `open` must create the file or
+open (and truncate) the existing one. A sequential overwrite from a later exec works.
+
+```bash
+x 'mkdir -p /mnt/archil/archil-repro/5 && echo created'                                       # exec 1
+for w in 1 2 3 4; do x "echo w$w > /mnt/archil/archil-repro/5/f && echo ok-w$w" & done; wait   # execs 2-5, at once
+#  -> one "ok-wN"; the other three: /bin/sh: 1: cannot create /mnt/archil/archil-repro/5/f: File exists
+x 'echo again > /mnt/archil/archil-repro/5/f && cat /mnt/archil/archil-repro/5/f'            # exec 6, afterwards
+#  -> again
+```
+
+| 4 concurrent writers, same new file | Writers failing with `EEXIST` |
+|---|---|
+| Default exec (`POST /api/disks/{id}/exec`), 3 trials | 3, 3, 3 of 4 |
+| `conditional` mount (`POST /api/exec`), 3 trials | 3, 1, 3 of 4 |
+
+**Inferred cause:** each writer's lookup finds no file, its create reaches the server after another writer's,
+and the client returns the server's "already exists" instead of retrying as an open of the existing file.
+
+**Why it matters:** several workers writing the same status, lock or result file is common in agent swarms
+and fan-out jobs; on Archil the losers crash instead of overwriting. The surviving file was always exactly one
+writer's content (no torn data), and `O_APPEND` writes from the writers that got through were all intact
+(400/400 lines), so the data path looks sound — it is the create race.
+
+## 2. Shared-mode execs can't rename, `chmod` or delete another exec's entries
 
 **What the docs say.** Serverless exec mounts disks in shared mode, so you need to run `archil checkout`
 before changing files ([Serverless execution](https://docs.archil.com/compute/serverless-execution)). In shared
@@ -44,7 +74,7 @@ a later exec tries ten operations on them:
 | `unlink` (also in a subdirectory) | ✕ `EROFS` 8/8 | ✓ 8/8 | ✓ covered |
 | `rename`, and **write-temp-then-rename** | ✕ `EROFS` 8/8 | ✓ 8/8 | not mentioned |
 | `chmod` | ✕ `EROFS` 8/8 | ✓ 8/8 | not mentioned |
-| SQLite create + commit (see #2) | ✕ `disk I/O error` 8/8 | ✓ 8/8 | not mentioned |
+| SQLite create + commit (see #3) | ✕ `disk I/O error` 8/8 | ✓ 8/8 | not mentioned |
 
 The `archil` CLI is installed in the exec image, so the documented fix works on the single-disk endpoint:
 `archil checkout` inside the command took a median **13.5 ms** (12.8–14.4 ms, n = 8).
@@ -64,9 +94,9 @@ x 'archil checkout /mnt/archil/archil-repro/1 && mv /mnt/archil/archil-repro/1/a
 - `POST /api/disks/{id}/exec` accepts a `checkoutPaths` field with HTTP 200 and silently ignores it (it is a
   `POST /api/exec` mount option). Rejecting unknown fields would make the mistake visible.
 
-## 2. SQLite fails in any directory an earlier exec created
+## 3. SQLite fails in any directory an earlier exec created
 
-**Verified.** A consequence of #1 worth its own note, because the
+**Verified.** A consequence of #2 worth its own note, because the
 [performance tips](https://docs.archil.com/details/performance-tips) give SQLite tuning advice, including for
 WAL mode (which fails across execs), and the failure looks like data loss. SQLite's default journal mode deletes its rollback journal on every commit, which needs
 a delegation on the directory. So in a directory another exec created, even **creating** a database fails,
@@ -90,7 +120,7 @@ Journal modes in a directory from an earlier exec, without a checkout: `DELETE` 
 `PERSIST` ✓ · `MEMORY` ✓. A short "SQLite across execs" note — run `archil checkout` on the database's
 directory, or use `journal_mode=TRUNCATE` — would prevent data that looks lost.
 
-## 3. `--readdir-expiry 0` refreshes listings but not failed lookups; the ~30 s delay runs from the lookup
+## 4. `--readdir-expiry 0` refreshes listings but not failed lookups; the ~30 s delay runs from the lookup
 
 **What the docs say.** The guide [What Archil does](https://archil.com/guides/storage-for-agents/what-archil-does)
 says "A new file takes about 30 s to appear on another machine by default" and recommends running
@@ -155,7 +185,7 @@ help text), and note failed-lookup caching on the Consistency and Caching refere
 file rechecks it" — that's where we looked first, and it is what "poll until the file appears" handoffs between
 agents run into.
 
-## 4. Performance — a command that writes pays ~70 ms more in `executeMs`
+## 5. Performance — a command that writes pays ~70 ms more in `executeMs`
 
 **Verified twice** with shell-only commands (default image, n = 6 each, two sessions): `true` has
 `executeMs` of **3–4 ms**; `echo x > /mnt/archil/<file>` has **56–92 ms** (median ≈ 77 ms). That matches the
@@ -164,7 +194,7 @@ response returns"). Inside a persistent sandbox, a 4 KiB write + fsync completes
 including the network. Documenting this cost — and whether it scales with the amount written — would help
 users choose between exec and sandboxes.
 
-## 5. Performance — `sandbox.exec()` is slower per call than a serverless exec
+## 6. Performance — `sandbox.exec()` is slower per call than a serverless exec
 
 **Measured; cause inferred.** With one warm sandbox (1 vCPU / 2 GiB), `sandbox.exec("python3 …")` took a
 median **434 ms** per no-op (n = 10), versus **77 ms** for the same work sent over stdin to one long-lived
@@ -173,7 +203,7 @@ gap is likely process-connection setup (connection URL, WebSocket and TLS) on ev
 connection across `exec()` calls in the SDK, or documenting the long-lived-process pattern, would make warm
 sandboxes the fastest option rather than the slowest.
 
-## 6. Docs — gaps that cost us time
+## 7. Docs — gaps that cost us time
 
 - **Custom image cost.** The docs say a non-default image "boots on demand" with higher `queueMs`, without a
   number. Default image: **30–33 ms**, every time (n = 10+). `python:3.13-slim`: **134–161 ms** across 46
@@ -183,6 +213,24 @@ sandboxes the fastest option rather than the slowest.
   so many Python workloads don't need `baseImage` at all.
 - **Exclusive sandbox mounts.** A plain sandbox mount takes the disk's exclusive root delegation (from the
   SDK typings); worth stating on the sandbox page, since it blocks other writers while the sandbox runs.
+
+## What worked as documented
+
+Equally worth saying — these held every time we checked:
+
+- **Cross-microVM handoff.** 336/336 steps over two 8-trial runs: files written with `fsync` and read back from a
+  fresh exec byte for byte, SQLite (`TRUNCATE` journal) reopened with `integrity_check` = ok, parallel readers,
+  and parallel writers to separate files. 1 MiB files too (36/36).
+- **The 5-minute exec limit and best-effort flush.** Execs that slept past the limit were stopped at 300 s (the
+  last heartbeat file on disk was written at 299.05 s, 2/2). Every write survived — with `fsync` and without,
+  including unsynced writes made 1–3 s before the kill (6 trials, 3 rounds) — and the killed exec's delegations
+  were released, so a later `archil checkout` of the parent succeeded. The one client that saw the response got
+  HTTP 504 after 300.25 s as an nginx HTML page, not the documented `Exec timed out` JSON.
+- **Concurrent writers to one file** (`conditional` mount): the file always held exactly one writer's content,
+  never a torn mix, and `O_APPEND` lines from concurrent writers were all intact.
+- **Overwrites are seen on the next `open()`** by a long-lived reader, as the consistency page says.
+- **Fast paths inside a delegated directory:** create 0.15 ms, `fsync` of 4 KiB ~3.8 ms, directory `fsync`
+  0.09 ms. The expensive step is `mkdir` (~46 ms), which is where a new directory's delegation is taken.
 
 ---
 
