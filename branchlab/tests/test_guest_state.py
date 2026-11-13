@@ -19,23 +19,42 @@ class TestFixture(unittest.TestCase):
 
     def test_state_and_sqlite_survive_separate_processes(self):
         with tempfile.TemporaryDirectory() as temp:
-            p = Path(temp) / ".diskscope" / "branchlab-abcdef123456"
+            p = Path(temp) / ".diskscope" / "branchlab-run12345-0-handoff"
             for action, worker in [
                 ("init", 0), ("write", 0), ("read", 0),
                 ("sqlite-write", 0), ("sqlite-check", 0),
                 ("parallel-write", 0), ("parallel-write", 1),
                 ("parallel-check", 0), ("sem-setup", 0), ("sem-probe", 0),
-                ("sem-probe-checkout", 0), ("vis-setup", 0), ("vis-writer", 0), ("cleanup", 0),
+                ("sem-probe-checkout", 0), ("vis-setup", 0), ("vis-writer", 0),
             ]:
                 child = subprocess.run([sys.executable, "-S", str(SOURCE), action, str(p), "4", str(worker), "2"], capture_output=True, text=True)
                 self.assertEqual(child.returncode, 0, f"{action}: {child.stderr}")
                 self.assertIn(module.MARKER, child.stdout)
+            child = self.run_guest_cleanup(p.parent / "branchlab-run12345-0-all")
+            self.assertEqual(child.returncode, 0, child.stderr)
             self.assertFalse(p.exists())
 
     def test_rejects_invalid_worker_index(self):
         with self.assertRaises(ValueError):
             module.payload(4, 100)
 
+
+    def run_guest_cleanup(self, base):
+        return subprocess.run([sys.executable, "-S", str(SOURCE), "cleanup-trial", str(base), "4", "0", "1"],
+                              capture_output=True, text=True)
+
+    def test_trial_cleanup_is_scoped_and_fails_without_parent(self):
+        with tempfile.TemporaryDirectory() as temp:
+            parent = Path(temp) / ".diskscope"
+            keep = [parent / "branchlab-run12345-1-sqlite", parent / "branchlab-otherrun-0-sqlite", parent / "unrelated"]
+            gone = [parent / "branchlab-run12345-0-sqlite", parent / "branchlab-run12345-0-writers"]
+            for d in keep + gone:
+                d.mkdir(parents=True)
+            self.assertEqual(self.run_guest_cleanup(parent / "branchlab-run12345-0-all").returncode, 0)
+            self.assertTrue(all(d.exists() for d in keep))
+            self.assertFalse(any(d.exists() for d in gone))
+            missing = Path(temp) / "nomount" / ".diskscope" / "branchlab-run12345-0-all"
+            self.assertNotEqual(self.run_guest_cleanup(missing).returncode, 0)
 
     def run_guest(self, *args):
         return subprocess.run([sys.executable, "-S", str(SOURCE), *map(str, args)], capture_output=True, text=True)
@@ -68,6 +87,23 @@ class TestFixture(unittest.TestCase):
             r = self.result(subprocess.CompletedProcess([], 0, out, ""))["detail"]
             self.assertLess(r["t_prime"], w["t_start"])
             self.assertTrue(all(t is not None and t >= w["t_start"] for t in r["first_seen"].values()), r)
+
+    def test_encoder_matches_json(self):
+        import json
+        for v in [{"a": 1, "b": [1.5, None, True, False], "c": 'q"\\\n\t\u00b7 ·', "d": {"e": "ENOENT"}}, [], {}, 0, -2.25e-7]:
+            self.assertEqual(json.loads(module.encode(v)), v)
+        self.assertEqual(module.encode(float("nan")), "null")
+
+    def test_hot_path_avoids_slow_imports(self):
+        # re and json each cost ~15-30 ms in a cold microVM; the guest must not import them.
+        with tempfile.TemporaryDirectory() as temp:
+            p = Path(temp) / ".diskscope" / "branchlab-abcdef123456"
+            for action in ("init", "write", "read"):
+                child = subprocess.run([sys.executable, "-S", "-X", "importtime", str(SOURCE), action, str(p), "4", "0", "1"],
+                                       capture_output=True, text=True)
+                self.assertEqual(child.returncode, 0, child.stderr)
+                imported = {line.split("|")[-1].strip() for line in child.stderr.splitlines() if "|" in line}
+                self.assertFalse(imported & {"re", "json"}, f"{action} imported {imported & {'re', 'json'}}")
 
     def test_visibility_cap_is_bounded(self):
         with self.assertRaises(ValueError):

@@ -56,7 +56,7 @@ const median=a=>{const xs=a.filter(Number.isFinite).sort((x,y)=>x-y);if(!xs.leng
 const backends=[...new Set(all.map(o=>o.backend))].sort((a,b)=>(a.startsWith('archil')?0:1)-(b.startsWith('archil')?0:1));
 for(const b of backends){const o=document.createElement('option');o.value=b;o.textContent=label(b);$('provider').appendChild(o);
  const k=document.createElement('span');k.innerHTML='<i class="key" style="background:'+color(b)+'"></i>';k.append(label(b));$('legend').appendChild(k);}
-const steps=['handoff/init','handoff/write-fsync','handoff/read-fresh-vm','handoff/cleanup','sqlite/init','sqlite/commit-16','sqlite/reopen-fresh-vm','sqlite/cleanup','readfan/init','readfan/prepare','readfan/parallel-read','readfan/cleanup','writers/init','writers/disjoint-path','writers/reconcile','writers/cleanup'];
+const steps=['handoff/init','handoff/write-fsync','handoff/read-fresh-vm','handoff/cleanup','sqlite/init','sqlite/commit-16','sqlite/reopen-fresh-vm','sqlite/cleanup','readfan/init','readfan/prepare','readfan/parallel-read','readfan/cleanup','writers/init','writers/disjoint-path','writers/reconcile','writers/cleanup','trial/cleanup'];
 const rank=t=>{const i=steps.indexOf(t);return i<0?999:i;};
 function selected(){const b=$('provider').value;return all.filter(o=>b==='all'||o.backend===b);}
 const core=o=>!/^(semantics|visibility)\//.test(o.task);
@@ -73,7 +73,7 @@ function correctness(el,obs){el.innerHTML='';const ts=tasks(obs);if(!ts.length){
   for(const b of backends){const xs=obs.filter(o=>o.task===t&&o.backend===b);if(!xs.length)continue;const good=xs.filter(o=>o.ok).length;const br=document.createElement('div');br.className='barrow';
    const tr=document.createElement('div');tr.className='track';const a=document.createElement('div');a.className='bar';a.style.background=color(b);a.style.width=(100*good/xs.length)+'%';tr.appendChild(a);
    if(good<xs.length){const f=document.createElement('div');f.className='bar';f.style.background='var(--critical)';f.style.width=(100*(xs.length-good)/xs.length)+'%';tr.appendChild(f);}
-   const v=document.createElement('div');v.className='val';v.innerHTML=(good===xs.length?'<span class="ok">✓ '+good+'/'+xs.length+'</span> · ≤'+Math.round(100*(1-Math.pow(.05,1/xs.length)))+'% fail':'<span class="bad">✕ '+(xs.length-good)+' fail</span> · '+good+'/'+xs.length);v.title=good===xs.length?'0 failures in '+xs.length+': 95% upper bound on the true failure rate is 1 − 0.05^(1/n)':'';br.append(tr,v);bars.appendChild(br);}
+   const v=document.createElement('div');v.className='val';const ind=new Set(xs.map(o=>o.run_id+'/'+o.trial)).size;v.innerHTML=(good===xs.length?'<span class="ok">✓ '+good+'/'+xs.length+'</span> · ≤'+Math.round(100*(1-Math.pow(.05,1/ind)))+'% fail':'<span class="bad">✕ '+(xs.length-good)+' fail</span> · '+good+'/'+xs.length);v.title=good===xs.length?'0 failures in '+ind+' independent trials (parallel calls in one trial share a write, so they count once): 95% upper bound on the failure rate is 1 − 0.05^(1/n)':'';br.append(tr,v);bars.appendChild(br);}
   row.append(n,bars);el.appendChild(row);}}
 const DOCS={'overwrite':'✓ open-for-write takes a delegation','append':'✓ open-for-write takes a delegation','create-file':'✓ create takes a delegation','mkdir':'✓ create takes a delegation','chmod':'not stated','rename':'not stated','tmp+rename':'not stated','unlink':'✕ needs a delegation on the parent','unlink-in-subdir':'✕ needs a delegation on the parent','sqlite-create':'not stated'};
 const OPS=Object.keys(DOCS);
@@ -83,12 +83,14 @@ function semantics(el,obs){const probes=obs.filter(o=>o.detail&&o.detail.ops);if
  const cell=xs=>{const tally={};for(const o of xs){const v=o.detail.ops[cell.op]??'missing';tally[v]=(tally[v]||0)+1;}return Object.entries(tally).map(([v,n])=>(v==='ok'?'<span class="ok">✓ works</span>':'<span class="bad">✕ '+esc(v.replace(/^OperationalError: /,''))+'</span>')+' <span class="n">'+n+'/'+xs.length+'</span>').join('<br>');};
  const co=probes.filter(o=>o.detail.checkout_ms!=null).map(o=>o.detail.checkout_ms);
  el.innerHTML='<div class="tablewrap flat"><table>'+head+OPS.map(op=>{cell.op=op;return '<tr><td><b>'+op+'</b></td>'+cols.map(c=>'<td>'+cell(c.xs)+'</td>').join('')+'<td class="docs">'+DOCS[op]+'</td></tr>';}).join('')+'</table></div>'+(co.length?'<p class="foot">Median <code>archil checkout</code> inside the exec: <b>'+nice(median(co))+' ms</b> (n='+co.length+').</p>':'');}
-const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function visibility(el,allObs){
  const localTrials=allObs.filter(o=>o.task==='visibility/reader'&&o.detail&&o.detail.first_seen&&!o.backend.startsWith('archil'));
  const obs=allObs.filter(o=>o.backend.startsWith('archil'));
  const readers=obs.filter(o=>o.task==='visibility/reader'&&o.detail&&o.detail.first_seen);
  const trials=readers.map(r=>{const w=obs.find(o=>o.task==='visibility/writer'&&o.run_id===r.run_id&&o.trial===r.trial&&o.backend===r.backend);return w&&w.detail?{r,w,b:r.backend,t0:r.detail.t_prime,write:w.detail.t_fsynced-r.detail.t_prime,cap:r.detail.cap_s,ok:r.ok}:null;}).filter(t=>t&&t.ok);
+ // When this probe's own file was fsynced (newer runs record it per directory; older runs: the last fsync).
+ const wAt=(t,pr)=>{const by=t.w.detail.t_fsynced_by_dir,dirs=t.r.detail.dirs;return (by&&dirs&&by[dirs[pr]]!=null?by[dirs[pr]]:t.w.detail.t_fsynced)-t.t0;};
  if(!trials.length){el.innerHTML='<div class="empty">No valid visibility trials in these runs.</div>';return;}
  const probes=Object.keys(trials[0].r.detail.first_seen);
  const xmax=Math.max(35,...trials.map(t=>Math.min(t.cap,Math.max(t.write,...Object.values(t.r.detail.first_seen).map(v=>v==null?t.cap:v-t.t0)))))*1.04;
@@ -102,17 +104,17 @@ function visibility(el,allObs){
  const shade=t=>{const i=delays.indexOf(Math.round(t.write));const ramp=['#ef9a55','#dd6a22','#a33a0b','#6e270a'];return ramp[Math.min(ramp.length-1,Math.round(i*(ramp.length-1)/Math.max(1,delays.length-1)))];};
  probes.forEach((pr,i)=>{const y0=T+i*rowH;if(i)add('line',{x1:0,x2:W,y1:y0,y2:y0,class:'sep'});add('text',{x:0,y:y0+rowH/2,class:'lab'},pr);
   trials.forEach((t,j)=>{const y=y0+9+j*lane+lane/2;const seen=t.r.detail.first_seen[pr];const c=shade(t);
-   const end=seen==null?t.cap:seen-t.t0;add('line',{x1:x(t.write),x2:x(end),y1:y,y2:y,stroke:c,class:'win'});add('line',{x1:x(t.write),x2:x(t.write),y1:y-4,y2:y+4,stroke:c,class:'tick'});
+   const end=seen==null?t.cap:seen-t.t0,wp=wAt(t,pr);add('line',{x1:x(wp),x2:x(end),y1:y,y2:y,stroke:c,class:'win'});add('line',{x1:x(wp),x2:x(wp),y1:y-4,y2:y+4,stroke:c,class:'tick'});
    const d=add('circle',{cx:x(end),cy:y,r:3.5,fill:seen==null?'var(--surface)':c,stroke:c,class:'dot'});
-   const lag=seen==null?'not seen within '+t.cap+' s':nice(1000*(seen-t.r.detail.t_prime-t.write))+' ms after the write';
-   d.appendChild(Object.assign(document.createElementNS(ns,'title'),{textContent:pr+' · trial '+(t.r.trial+1)+'\nwrite at +'+t.write.toFixed(1)+' s · seen at +'+end.toFixed(1)+' s\n'+lag}));});});
+   const lag=seen==null?'not seen within '+t.cap+' s':nice(1000*(end-wp))+' ms after the write';
+   d.appendChild(Object.assign(document.createElementNS(ns,'title'),{textContent:pr+' · trial '+(t.r.trial+1)+'\nwrite at +'+wp.toFixed(1)+' s · seen at +'+end.toFixed(1)+' s\n'+lag}));});});
  el.innerHTML='';el.appendChild(svg);
  const k=document.createElement('p');k.className='foot';k.innerHTML='Tick = writer’s <code>fsync</code> returned · dot = reader first saw the change · line = how long the reader saw stale state. Shade = when the writer ran (lighter = earlier). Hollow dot = not seen before the reader gave up. Clocks are two microVMs’ wall clocks; skew is negligible at this scale.';el.appendChild(k);
- if(localTrials.length){const lt=localTrials.flatMap(r=>Object.values(r.detail.first_seen)).filter(v=>v!=null).length,tot=localTrials.length*Object.keys(localTrials[0].detail.first_seen).length;const q=document.createElement('p');q.className='foot';q.innerHTML='Local control (same probes, separate processes on this Mac): '+lt+' of '+tot+' changes seen on the first poll after the write.';el.appendChild(q);}
- const tbl=document.createElement('div');tbl.className='tablewrap flat';tbl.innerHTML='<table><tr><th>ACCESS PATH</th><th class="num">STALE FOR (MEDIAN)</th><th class="num">SEEN AT, SINCE READER LOOKED (MEDIAN)</th><th class="num">NOT SEEN</th></tr>'+probes.map(pr=>{const lag=[],at=[];let miss=0;for(const t of trials){const v=t.r.detail.first_seen[pr];if(v==null){miss++;continue;}lag.push(v-t.t0-t.write);at.push(v-t.t0);}return '<tr><td>'+pr+'</td><td class="num">'+(lag.length?(median(lag)<0.05?'≈0 s':nice(median(lag))+' s'):'> '+Math.round(Math.min(...trials.map(t=>t.cap-t.write)))+' s')+'</td><td class="num">'+(at.length?nice(median(at))+' s':'—')+'</td><td class="num">'+miss+'/'+trials.length+'</td></tr>';}).join('')+'</table>';el.appendChild(tbl);}
+ if(localTrials.length){const lw=r=>allObs.find(o=>o.task==='visibility/writer'&&o.run_id===r.run_id&&o.trial===r.trial&&o.backend===r.backend);let lt=0,tot=0;for(const r of localTrials){const w=lw(r);if(!w||!w.detail)continue;for(const [pr,v] of Object.entries(r.detail.first_seen)){tot++;const by=w.detail.t_fsynced_by_dir,dirs=r.detail.dirs;const wt=by&&dirs&&by[dirs[pr]]!=null?by[dirs[pr]]:w.detail.t_fsynced;if(v!=null&&v-wt<0.1)lt++;}}const q=document.createElement('p');q.className='foot';q.innerHTML='Local control (same probes, separate processes on this Mac): '+lt+' of '+tot+' changes seen within 100 ms of the write (the reader polls every 20 ms).';el.appendChild(q);}
+ const tbl=document.createElement('div');tbl.className='tablewrap flat';tbl.innerHTML='<table><tr><th>ACCESS PATH</th><th class="num">STALE FOR (MEDIAN)</th><th class="num">SEEN AT, SINCE READER LOOKED (MEDIAN)</th><th class="num">NOT SEEN</th></tr>'+probes.map(pr=>{const lag=[],at=[];let miss=0;for(const t of trials){const v=t.r.detail.first_seen[pr];if(v==null){miss++;continue;}lag.push(v-t.t0-wAt(t,pr));at.push(v-t.t0);}return '<tr><td>'+esc(pr)+'</td><td class="num">'+(lag.length?(median(lag)<0.05?'≈0 s':nice(median(lag))+' s'):'> '+Math.round(Math.min(...trials.map(t=>t.cap-t.write)))+' s')+'</td><td class="num">'+(at.length?nice(median(at))+' s':'—')+'</td><td class="num">'+miss+'/'+trials.length+'</td></tr>';}).join('')+'</table>';el.appendChild(tbl);}
 function update(){const obs=selected();const passed=obs.filter(o=>o.ok);
  $('n').textContent=obs.length;$('pass').textContent=obs.length?passed.length+'/'+obs.length:'—';
- const arch=passed.filter(o=>o.backend.startsWith('archil'));$('p50').textContent=arch.length?nice(median(arch.map(o=>o.client_wall_ms)))+' ms':'—';
+ const arch=passed.filter(o=>o.backend.startsWith('archil')&&core(o));$('p50').textContent=arch.length?nice(median(arch.map(o=>o.client_wall_ms)))+' ms':'—';
  $('fresh').textContent=arch.length?nice(median(arch.filter(o=>/fresh-vm|parallel-read/.test(o.task)).map(o=>o.client_wall_ms)))+' ms':'—';
  const c=obs.filter(core);correctness($('correctness'),c);chart($('latency'),c,'client_wall_ms');chart($('work'),c,'work_ms');semantics($('semantics'),obs);visibility($('visibility'),obs);
  $('tbody').innerHTML='';for(const o of obs){const tr=document.createElement('tr');tr.title=o.error||'';
@@ -152,7 +154,7 @@ def main():
 <p>Steps 01, 04 and 05 use a <strong>fresh microVM per step</strong>, whose caches start empty — fresh-execution visibility. Section 03 is the long-lived-reader case, with its own caveats: n = 6, one region, wall clocks of two microVMs.</p>
 <p>Archil commits a writing exec at exit (~70 ms), so a fresh-VM read after <code>write-fsync</code> can't separate <code>fsync</code> durability from that commit. No host failure is injected.</p>
 <p>Correctness steps use <code>journal_mode=TRUNCATE</code> and clean up with a <code>conditional</code> mount, because of what section 02 shows. Full repros: <a href="https://github.com/ThilakShekharShriyan/diskscope/blob/main/ARCHIL-FINDINGS.md">ARCHIL-FINDINGS.md</a>.</p>
-<p>“≤31% fail” is the 95% upper bound on the failure rate after 0 failures in 8 trials: passing every trial is evidence, not proof. Writers never share a file. No disks, branches or checkpoints are created.</p></div></section></div>
+<p>“≤31% fail” is the 95% upper bound on the failure rate after 0 failures in n independent trials (1 − 0.05^(1/n); 31% for n = 8). Parallel calls within one trial count once. Passing every trial is evidence, not proof. Writers never share a file. No disks, branches or checkpoints are created.</p></div></section></div>
 <footer class="wrap">DiskScope BranchLab · generated from raw JSON by <code>branchlab/report.py</code> · independent; not affiliated with Archil</footer>
 <script type="application/json" id="branchlab-payload">{serialized}</script><script>{JS}</script></body></html>"""
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -12,9 +12,9 @@ import time
 MARKER = "BRANCHLAB_JSON="
 ACTIONS = {
     "init", "write", "read", "sqlite-write", "sqlite-check",
-    "parallel-write", "parallel-check", "cleanup",
+    "parallel-write", "parallel-check",
     "sem-setup", "sem-probe", "sem-probe-checkout",
-    "vis-setup", "vis-reader", "vis-writer",
+    "vis-setup", "vis-reader", "vis-writer", "cleanup-trial",
 }
 # The two contents of the visibility file `y`; different lengths so a stale size is detectable.
 VIS_OLD = b"o" * 100
@@ -22,10 +22,16 @@ VIS_NEW = b"n" * 200
 VIS_NEW_FILE = b"x" * 64
 
 
+_NAME_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")
+
+
 def safe_base(raw):
-    import re
+    # No `re`: importing it costs ~15-30 ms in a cold microVM, on every step.
+    name = os.path.basename(raw)
+    suffix = name[len("branchlab-"):]
     if (not os.path.isabs(raw) or os.path.basename(os.path.dirname(raw)) != ".diskscope"
-            or not re.fullmatch(r"branchlab-[a-zA-Z0-9-]{8,90}", os.path.basename(raw))
+            or not name.startswith("branchlab-") or not 8 <= len(suffix) <= 90
+            or not set(suffix) <= _NAME_CHARS
             or ".." in raw.split("/")):
         raise ValueError("unsafe fixture path: expected absolute .../.diskscope/branchlab-<id>")
     return raw
@@ -169,10 +175,15 @@ def set_readdir_expiry_zero(d):
 
 
 def vis_writer(vis):
+    """Returns, per directory, when that file's fsync returned (staleness is measured from it)."""
+    done = {}
     for d in VIS_NEW_DIRS:
         synced_write(os.path.join(vis, d, "x"), VIS_NEW_FILE)
+        done[d] = time.time()
     for d in VIS_OLD_DIRS:
         synced_write(os.path.join(vis, d, "y"), VIS_NEW, exclusive=False)
+        done[d] = time.time()
+    return done
 
 
 def vis_reader(vis, cap_s):
@@ -205,6 +216,8 @@ def vis_reader(vis, cap_s):
         "overwrite · stat() size": lambda: os.stat(p("old-stat", "y")).st_size == len(VIS_NEW),
         "overwrite · already-open fd": lambda: os.pread(held, 4096, 0) == VIS_NEW,
     }
+    dirs = dict(zip(probes, ("new-open", "new-stat", "new-list", "new-list-full", "new-open-expiry0",
+                             "old-open", "old-stat", "old-fd")))
     first = {k: None for k in probes}
     polls = 0
     deadline = t_prime + cap_s
@@ -220,10 +233,41 @@ def vis_reader(vis, cap_s):
         time.sleep(0.02)
     os.close(held)
     return {"t_prime": t_prime, "t_end": time.time(), "cap_s": cap_s, "polls": polls,
-            "primed": primed, "first_seen": first}
+            "primed": primed, "first_seen": first, "dirs": dirs}
+
+
+def encode(v):
+    """Minimal JSON encoder. `import json` costs ~30 ms in a cold Archil microVM (measured), on every step."""
+    if v is None:
+        return "null"
+    if v is True:
+        return "true"
+    if v is False:
+        return "false"
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, float):
+        return repr(v) if v == v and v not in (float("inf"), float("-inf")) else "null"
+    if isinstance(v, str):
+        out = []
+        for c in v:
+            if c == '"' or c == "\\":
+                out.append("\\" + c)
+            elif ord(c) < 0x20:
+                out.append("\\u%04x" % ord(c))
+            else:
+                out.append(c)
+        return '"' + "".join(out) + '"'
+    if isinstance(v, dict):
+        return "{" + ",".join(encode(str(k)) + ":" + encode(x) for k, x in v.items()) + "}"
+    if isinstance(v, (list, tuple)):
+        return "[" + ",".join(encode(x) for x in v) + "]"
+    raise TypeError(f"cannot encode {type(v).__name__}")
 
 
 def run(action, base, size_kib, worker, workers, param):
+    if action == "cleanup-trial" and not os.path.basename(base).endswith("-all"):
+        raise ValueError("cleanup-trial expects .../branchlab-<run>-<trial>-all")
     if action not in ACTIONS:
         raise ValueError("unrecognized action")
     if not 1 <= workers <= 4:
@@ -288,11 +332,18 @@ def run(action, base, size_kib, worker, workers, param):
 
     elif action == "parallel-check":
         operations = workers
+        bad = []
         for idx in range(workers):
-            got = read_file(j("workers", f"w-{idx}", "payload.bin"))
-            valid = valid and got == payload(size_kib, idx)
+            try:
+                got = read_file(j("workers", f"w-{idx}", "payload.bin"))
+            except OSError as e:
+                bad.append(f"w-{idx}: {type(e).__name__}")
+                continue
             size += len(got)
-        detail = f"verified {workers} distinct worker files"
+            if got != payload(size_kib, idx):
+                bad.append(f"w-{idx}: wrong bytes")
+        valid = not bad
+        detail = f"verified {workers} distinct worker files" if valid else "; ".join(bad)
 
     elif action == "sem-setup":
         os.mkdir(j("sem"))
@@ -322,15 +373,26 @@ def run(action, base, size_kib, worker, workers, param):
 
     elif action == "vis-writer":
         t_start = time.time()
-        vis_writer(j("vis"))
-        detail = {"t_start": t_start, "t_fsynced": time.time()}
+        per_dir = vis_writer(j("vis"))
+        detail = {"t_start": t_start, "t_fsynced": time.time(), "t_fsynced_by_dir": per_dir}
 
-    elif action == "cleanup":
-        # The ONLY recursive delete. safe_base() has already checked the path.
+    elif action == "cleanup-trial":
+        # The ONLY recursive delete: every sibling directory named branchlab-<run>-<trial>-<case>.
+        # safe_base() has checked the path; the parent must exist, or the disk isn't mounted where
+        # we expect and "nothing to remove" would be a false success.
         import shutil
-        if os.path.exists(base):
-            shutil.rmtree(base)
-        detail = "removed scoped test directory only"
+        parent = os.path.dirname(base)
+        if not os.path.isdir(parent):
+            raise FileNotFoundError(f"scratch parent {parent} missing: is the disk mounted?")
+        stem = os.path.basename(base)[:-len("all")]
+        removed = []
+        for name in os.listdir(parent):
+            path = os.path.join(parent, name)
+            if name.startswith(stem) and safe_base(path) and os.path.isdir(path) and not os.path.islink(path):
+                shutil.rmtree(path)
+                removed.append(name[len(stem):])
+        operations = len(removed)
+        detail = "removed " + (", ".join(sorted(removed)) or "nothing")
 
     elapsed = (time.perf_counter_ns() - start) / 1e6
     return {"valid": valid, "elapsed_ms": elapsed, "operations": operations,
@@ -343,8 +405,7 @@ def main():
     action, raw, size, worker, workers = sys.argv[1:6]
     param = int(sys.argv[6]) if len(sys.argv) == 7 else 0
     result = run(action, safe_base(raw), int(size), int(worker), int(workers), param)
-    import json
-    print(MARKER + json.dumps(result, separators=(",", ":")), flush=True)
+    print(MARKER + encode(result), flush=True)
     if not result["valid"]:
         raise RuntimeError("BranchLab correctness assertion failed")
 

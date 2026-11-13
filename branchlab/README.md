@@ -23,6 +23,8 @@ Six cases; every step is its own command execution (a fresh Archil microVM, or a
 Default cases: `handoff,sqlite,readfan,writers,semantics`; add `--cases visibility` explicitly — each trial holds a
 reader exec open for up to `--cap-secs`.
 
+Each trial ends with one `trial/cleanup` that removes all of that trial's case directories, even after a failure, and results are saved after every trial.
+
 Every step records client wall time, Archil `queueMs` / `executeMs` / `totalMs`, the guest's own timing, and PASS/FAIL.
 
 ## Safety
@@ -31,7 +33,7 @@ Every step records client wall time, Archil `queueMs` / `executeMs` / `totalMs`,
 - Uses `/mnt/archil/.diskscope/branchlab-<unique-run-id>` for all remote files.
 - Guest deletion is restricted to a verified `branchlab-...` scratch folder directly under `.diskscope`; it will never delete the disk, the `.diskscope` parent, or arbitrary paths.
 - No disk checkpoints, branches, host termination, `--force` ownership takeovers, arbitrary shell commands, or shared-file writer races.
-- Defaults: 2 repetitions, 4 KiB payload, 2 concurrent workers, 46 API calls in a full run. Hard cap: 200 estimated calls.
+- Defaults: 2 repetitions, 4 KiB payload, 2 concurrent workers, 38 API calls in a full run (19 per trial, with one cleanup per trial). Hard cap: 200 estimated calls.
 - Cleanup is attempted even if a test fails. **A network failure can leave scratch data behind**; remove it with a `conditional` mount via `POST /api/exec`.
 - Results may contain runtime error text; inspect the generated dashboard and JSON before publishing. Don't commit API keys, `.env` files, or secrets.
 - A successful cross-VM read after `fsync` is not proof of resilience to an AZ outage or permanent host loss; no such fault is injected.

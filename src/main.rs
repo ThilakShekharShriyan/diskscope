@@ -117,12 +117,12 @@ fn run_local(root: PathBuf, runs: usize, size_mib: usize) -> Result<RunReport, S
         println!("{task:<16} local trial {:>2}: {:>8.2} ms  {}", trial + 1, observation.client_wall_ms, if observation.ok {"OK"} else {"FAIL"});
         report.observations.push(observation);
     }
-    // The guest removes everything it creates; tidy the (now empty) shared files directory. A failure
-    // here is recorded, never allowed to discard the measurements.
-    let files_dir = root.join(".diskscope").join("files");
-    if files_dir.exists() {
-        if let Err(e) = std::fs::remove_dir(&files_dir) {
-            report.environment.notes.push_str(&format!(" Cleanup warning: could not remove {}: {e}", files_dir.display()));
+    // The guest removes every per-call directory it creates; remove the run's (now empty) scope
+    // directory. remove_dir is not recursive, so it only succeeds if the guest really cleaned up.
+    // A failure is recorded, never allowed to discard the measurements.
+    if scope_dir.exists() {
+        if let Err(e) = std::fs::remove_dir(&scope_dir) {
+            report.environment.notes.push_str(&format!(" Cleanup warning: could not remove {}: {e}", scope_dir.display()));
         }
     }
     Ok(report)

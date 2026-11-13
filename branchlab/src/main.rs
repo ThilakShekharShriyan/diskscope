@@ -231,7 +231,7 @@ fn request(backend: &Backend, action: &str, base: &str, size_kib: usize, worker:
             // A default single-disk exec holds no delegation checkout, so it cannot unlink entries in
             // directories an earlier exec created (EROFS; ARCHIL-FINDINGS.md #1). Cleanup therefore
             // runs through the multi-disk endpoint with a conditional mount at /mnt/archil/d.
-            let (url, body) = if action == "cleanup" {
+            let (url, body) = if action.starts_with("cleanup") {
                 let mounted = base.replacen("/mnt/archil/", "/mnt/archil/d/", 1);
                 let cmd = format!("python3 -S -c {} {} {} {size_kib} {worker} {fanout} {param}",
                     sh_quote(GUEST), sh_quote(action), sh_quote(&mounted));
@@ -422,8 +422,6 @@ fn run_case(report: &mut RunReport, backend: &Backend, case: &str, trial: usize,
             _ => unreachable!("cases are validated in run()"),
         }
     }
-    // Cleanup even when a preceding stage fails. Only the scoped directory is removed.
-    call(report, backend, "cleanup", &format!("{case}/cleanup"), trial, fanout, &base, size_kib, 0);
 }
 
 /// A trial only measures staleness if the reader had primed its caches before the writer began.
@@ -431,9 +429,15 @@ fn check_visibility_order(reader: &mut Observation, writer: &Observation) {
     let primed = reader.detail.as_ref().and_then(|d| d["t_prime"].as_f64());
     let started = writer.detail.as_ref().and_then(|d| d["t_start"].as_f64());
     if let (Some(p), Some(w)) = (primed, started) {
+        let reader_end = reader.detail.as_ref().and_then(|d| d["t_end"].as_f64());
+        let written = writer.detail.as_ref().and_then(|d| d["t_fsynced"].as_f64());
         if p >= w {
             reader.ok = false;
             reader.error = Some(format!("Invalid trial: reader primed {:.2} s after the writer started; raise --writer-delay-secs", p - w));
+        } else if !writer.ok || matches!((written, reader_end), (Some(f), Some(e)) if f >= e) || written.is_none() {
+            // A writer that failed, or finished after the reader stopped polling, measures nothing.
+            reader.ok = false;
+            reader.error = Some("Invalid trial: the writer failed or finished after the reader stopped; raise --cap-secs".into());
         }
     } else if reader.ok {
         reader.ok = false;
@@ -443,9 +447,10 @@ fn check_visibility_order(reader: &mut Observation, writer: &Observation) {
 
 fn calls_for(case: &str, fanout: usize) -> usize {
     match case {
-        "handoff" | "sqlite" => 4,
-        "readfan" | "writers" => 3 + fanout,
-        "semantics" | "visibility" => 5,
+        // Per-case calls; one shared cleanup per trial is added in run().
+        "handoff" | "sqlite" => 3,
+        "readfan" | "writers" => 2 + fanout,
+        "semantics" | "visibility" => 4,
         _ => 0,
     }
 }
@@ -460,7 +465,10 @@ fn run(use_archil: bool, runs: usize, size_kib: usize, fanout: usize,
     if let Some(bad) = opts.cases.iter().find(|c| !CASES.contains(&c.as_str())) {
         return Err(format!("unknown case {bad:?}; expected one of {}", CASES.join(", ")));
     }
-    let upper_bound: usize = runs * opts.cases.iter().map(|c| calls_for(c, fanout)).sum::<usize>();
+    if opts.writer_delay_secs + 5 > opts.cap_secs {
+        return Err("writer-delay-secs must be at least 5 s below cap-secs, or the reader stops before the write".into());
+    }
+    let upper_bound: usize = runs * (1 + opts.cases.iter().map(|c| calls_for(c, fanout)).sum::<usize>());
     if upper_bound > 200 { return Err(format!("Refusing estimated {upper_bound} calls (> 200); lower runs or fanout")); }
 
     let (backend, region, suffix) = new_backend(use_archil)?;
@@ -496,16 +504,22 @@ fn run(use_archil: bool, runs: usize, size_kib: usize, fanout: usize,
     if opts.cases.iter().any(|c| c == "visibility") {
         println!("visibility: each trial holds one reader exec open for up to {} s", opts.cap_secs);
     }
+    if let Some(parent) = output.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let save = |report: &RunReport| -> Result<(), String> {
+        let serialized = serde_json::to_vec_pretty(report).map_err(|e| e.to_string())?;
+        std::fs::write(output, serialized).map_err(|e| e.to_string())
+    };
     for trial in 0..runs {
         for case in &opts.cases {
             run_case(&mut report, &backend, case, trial, fanout, size_kib, &prefix, &id, opts);
         }
+        // One cleanup per trial removes every case directory of this trial, even after failures.
+        call(&mut report, &backend, "cleanup-trial", "trial/cleanup", trial, fanout,
+             &scoped(&prefix, &id, trial, "all"), size_kib, 0);
+        save(&report)?; // a crash or Ctrl-C later still leaves every completed trial on disk
     }
-    if let Some(parent) = output.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let serialized = serde_json::to_vec_pretty(&report).map_err(|e| e.to_string())?;
-    std::fs::write(output, serialized).map_err(|e| e.to_string())?;
     let fails = report.observations.iter().filter(|o| !o.ok).count();
     println!("Saved {} records to {} ({fails} failures)", report.observations.len(), output.display());
     if fails > 0 { Err(format!("{fails} phase(s) failed: review JSON; cleanup phases were attempted")) } else { Ok(()) }
@@ -541,6 +555,35 @@ mod tests {
     #[test]
     fn quoting() {
         assert_eq!(sh_quote("a'b"), "'a'\\''b'");
+    }
+    fn obs(ok: bool, detail: Value) -> Observation {
+        Observation { task: "t".into(), trial: 0, fanout: 1, ok, client_wall_ms: 1.0, remote_total_ms: None,
+            remote_queue_ms: None, remote_execute_ms: None, work_ms: None, operations: None, bytes: None,
+            error: None, detail: Some(detail) }
+    }
+    #[test]
+    fn visibility_trial_validity() {
+        let writer = obs(true, json!({"t_start": 106.0, "t_fsynced": 106.2}));
+        let mut good = obs(true, json!({"t_prime": 100.0, "t_end": 190.0}));
+        check_visibility_order(&mut good, &writer);
+        assert!(good.ok);
+        // primed after the writer started
+        let mut late = obs(true, json!({"t_prime": 107.0, "t_end": 190.0}));
+        check_visibility_order(&mut late, &writer);
+        assert!(!late.ok);
+        // reader stopped before the write landed (the reviewer's cap 5 / delay 8 case)
+        let mut early = obs(true, json!({"t_prime": 100.0, "t_end": 105.0}));
+        check_visibility_order(&mut early, &writer);
+        assert!(!early.ok);
+        // writer failed
+        let mut orphan = obs(true, json!({"t_prime": 100.0, "t_end": 190.0}));
+        check_visibility_order(&mut orphan, &obs(false, json!({"t_start": 106.0})));
+        assert!(!orphan.ok);
+    }
+    #[test]
+    fn call_estimate_matches_the_default_suite() {
+        let per_trial = 1 + ["handoff", "sqlite", "readfan", "writers", "semantics"].iter().map(|c| calls_for(c, 2)).sum::<usize>();
+        assert_eq!(per_trial, 3 + 3 + 4 + 4 + 4 + 1);
     }
     #[test]
     fn tail_keeps_the_last_line() {
