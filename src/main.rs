@@ -238,9 +238,9 @@ fn main() {
                 }
                 if !(1..=8).contains(&parallel) { return Err("parallel must be between 1 and 8".into()); }
                 let warmups = parallel.max(levels.iter().copied().max().unwrap_or(1));
-                let calls = warmups + TASKS.len() * runs + levels.iter().sum::<usize>() * runs;
+                let calls = 1 + warmups + TASKS.len() * runs + levels.iter().sum::<usize>() * runs;
                 if calls > 200 { return Err(format!("Refusing {calls} calls: maximum is 200 per command")); }
-                println!("Planned remote calls: {calls} ({warmups} warm-up), up to {parallel} in flight, image={image}. Does NOT create/delete a disk.");
+                println!("Planned remote calls: {calls} ({warmups} warm-up, 1 cleanup), up to {parallel} in flight, image={image}. Does NOT create/delete a disk.");
                 let report = archil::run(runs, size_mib, &levels, parallel, &image)?;
                 let failed = report.observations.iter().filter(|o| !o.ok).count();
                 save_json(&output, &report)?;

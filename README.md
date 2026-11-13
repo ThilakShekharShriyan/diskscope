@@ -32,7 +32,7 @@ An agent's tool call increasingly runs as a fresh microVM attached to a shared d
 
 1. **Use the default exec image.** It is served from Archil's pool of ready microVMs: **33 ms** queue vs **143 ms** for any custom `baseImage`, which boots on demand. It already ships Python 3.10.
 2. **Keep the guest's cold start cheap.** Every exec is a fresh VM, so Python's stdlib is read from a cold cache: importing `sqlite3`, `hashlib`, `pathlib` and `json` up front cost ~135 ms. Importing per task and running `python3 -S` cut Archil-reported execute time from 107 ms to 38 ms.
-3. **For many calls, keep one process warm.** A long-lived worker inside a sandbox, fed over a single connection, answers a no-op in **77 ms** (about one network round-trip) and a durable 4 KiB write in **86 ms**, after a one-time ~2 s boot. Calling `sandbox.exec()` per task is the slowest option (434 ms) because each call opens a new process connection.
+3. **For many calls, keep one process warm.** A long-lived worker inside a sandbox, fed over a single connection, answers a no-op in **77 ms** (about one network round-trip) and a durable 4 KiB write in **86 ms**, after a one-time ~2 s boot. Calling `sandbox.exec()` per task is the slowest option (434 ms), likely because each call sets up a new process connection. (The sandbox ran 1 vCPU / 2 GiB; exec defaults to 2 vCPU / 4 GiB.)
 
 <p align="center"><img src="docs/assets/vs-local.svg" alt="Ratio of Archil to local median guest work time per task" width="100%"></p>
 
@@ -52,7 +52,7 @@ Approximate 95% intervals for every ratio are on the [dashboard](https://thilaks
 
 - **A single durable fsync is close to local** (1.4×). Plain macOS `fsync` doesn't flush the drive cache and returns in ~0.15 ms — compare against that and Archil looks 40× slower, which is wrong.
 - **Commit-heavy work compounds:** SQLite with `synchronous=FULL` is ~11× slower (≈13 ms per commit vs ≈1.1 ms).
-- **Every exec that writes pays ~110–120 ms at exit** for Archil's commit — the *start-up · commit* segment below.
+- **An exec that writes pays ~70 ms at exit** for Archil's commit (shell-only test: `true` 4 ms vs one-line write 76 ms). In the guest's numbers the *start-up · commit* segment is larger because it also includes DiskScope's own cleanup.
 - **Small-file metadata is fastest inside a sandbox** (0.52× local), whose exclusive mount can cache locally.
 - **Fan-out has a cost at 4:** four concurrent `stat()` calls raised the median from 157 ms to 213 ms; two at once showed no change.
 
@@ -68,9 +68,9 @@ Approximate 95% intervals for every ratio are on the [dashboard](https://thilaks
 
 Reported to Archil with minimal curl repros in [`ARCHIL-FINDINGS.md`](ARCHIL-FINDINGS.md):
 
-1. **Cross-exec deletes fail with `EROFS`.** An exec cannot unlink or rmdir anything inside a directory created by an earlier exec — even a file it created itself. Inside one sandbox the same workload cleans up fine.
-2. **SQLite databases break across execs.** A database created in one exec fails the next exec's commit (`disk I/O error`) and is then unreadable. `PRAGMA journal_mode=TRUNCATE` avoids it.
-3. **Exit commit** costs ~120 ms per writing exec; **`sandbox.exec()`** costs ~430 ms per call; the docs omit the custom-image queue cost and the default image's contents.
+1. **Default execs can't delete what earlier execs created — and report `EROFS`.** This is Archil's delegation model: the single-disk exec mount takes no checkout. Mounting through `POST /api/exec` with `checkoutPaths` or `conditional: true` works. DiskScope now removes its scratch directory that way after every run.
+2. **SQLite's default journal breaks across execs.** A database created in one exec fails the next exec's commit (`disk I/O error`) and is then unreadable from a default exec. Check out the directory, or use `PRAGMA journal_mode=TRUNCATE`.
+3. **Costs worth documenting:** ~70 ms commit per writing exec; ~430 ms per `sandbox.exec()` call; ~110 ms extra queue for any custom image; the default image already ships Python 3.10.
 
 ## Methodology
 
@@ -99,7 +99,7 @@ cargo run --release -- report --input results/*.json --output docs/index.html
 node scripts/readme-charts.mjs results/*.json
 ```
 
-**Guardrails:** never creates or deletes disks; allowlisted region hosts; validated disk IDs and image names; scratch files only under `/mnt/archil/.diskscope/<run>/`; at most 200 calls per run, estimate printed first; stops on HTTP 401/403/404/429; the sandbox benchmark always stops and deletes its sandbox; results keep only the last four characters of the disk ID.
+**Guardrails:** never creates or deletes disks; allowlisted region hosts; validated disk IDs and image names; scratch files only under `/mnt/archil/.diskscope/<run>/`, removed after every run; at most 200 calls per run, estimate printed first; stops on HTTP 401/403/404/429; the sandbox benchmark always stops and deletes its sandbox; results keep only the last four characters of the disk ID.
 
 **Flamegraph:** `cargo install inferno --locked && ./scripts/flamegraph.sh` on macOS without Xcode, or `cargo install flamegraph --locked` on Linux. It profiles the harness's own synthetic workload, not Archil.
 

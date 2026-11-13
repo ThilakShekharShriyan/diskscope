@@ -3,11 +3,11 @@
 Temporary files are *only* created below the `.diskscope` directory named by the caller's scoped path
 (`<root>/.diskscope/<run>/<task>`). This is deliberately not a correctness/fault-injection benchmark.
 
-Layout: every call creates its own directory and removes it afterwards. On Archil exec, a VM can only
-remove entries from directories created *in the same exec*: deleting inside, or removing, a directory
-whose parent came from an earlier exec fails with EROFS (measured; fsync is irrelevant). So the files a
-task creates are always deleted, but its empty directory survives as one leftover entry per remote call;
-that failure is reported as `cleanup_error`, never as a failed measurement.
+Layout: every call creates its own directory and removes it afterwards. A default Archil exec mount
+holds write delegations only on what that exec creates, so removing the per-call directory (whose parent
+came from an earlier exec) fails with EROFS. The files are still deleted; the leftover empty directory is
+reported as `cleanup_error` (never a failed measurement), and the Rust runner removes the whole run
+directory at the end with one `conditional` mount.
 
 Start-up cost matters here: every Archil exec is a fresh VM with a cold page cache, where importing
 sqlite3 + hashlib + pathlib + json (-> re) up front measured ~135 ms. So this module imports only

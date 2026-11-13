@@ -82,7 +82,7 @@
     if (noop) {
       const fixed = noop.queue + noop.startup + noop.other;
       append($('anatomyInsight'), ['Fixed cost per call: ', { b: C.fmtMs(fixed) }, ` — ${Math.round(noop.other / fixed * 100)}% network and API, ${Math.round(noop.queue / fixed * 100)}% queue, ${Math.round(noop.startup / fixed * 100)}% guest start-up.`,
-        ...(fs && fs.startup > noop.startup ? [' A call that writes adds about ', { b: C.fmtMs(fs.startup - noop.startup) }, ' of exit commit.'] : [])]);
+        ...(fs && fs.startup > noop.startup ? [' A call that writes adds about ', { b: C.fmtMs(fs.startup - noop.startup) }, ' — Archil\'s exit commit (~70 ms in a shell-only test) plus the guest\'s own cleanup.'] : [])]);
     }
 
     put('slowdownChart', C.dotCI(V.slowdown(data), { fmt: C.fmtX, ref: 1, sideLabels: ['faster than local', 'slower than local'] }), 'Needs both local and Archil runs of the same task.');

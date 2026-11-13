@@ -132,6 +132,28 @@ fn exec_task(api: &ArchilClient, task: &str, trial: usize, fanout: usize, scope:
     (result, false)
 }
 
+/// Remove this run's scratch directory. A default exec mount holds write delegations only on what that
+/// exec created, so it cannot delete directories made by earlier execs (EROFS). One call through the
+/// multi-disk endpoint with a `conditional` mount (writes without a delegation checkout) removes them.
+/// Only `.diskscope/<scope>` is touched; the outcome is recorded, never fatal.
+fn cleanup_scope(api: &ArchilClient, scope: &str) -> String {
+    let body = json!({
+        "disks": { "d": { "disk": api.disk_id, "conditional": true } },
+        "command": format!("rm -rf {} && echo removed", shell_quote(&format!("/mnt/archil/d/.diskscope/{scope}"))),
+    });
+    let response = api.client.post(format!("{}/api/exec", api.base_url)).bearer_auth(&api.api_key).json(&body).send()
+        .and_then(|r| { let ok = r.status().is_success(); r.bytes().map(|b| (ok, b)) });
+    match response {
+        Ok((true, b)) => match serde_json::from_slice::<Envelope>(&b).ok().and_then(|e| e.data) {
+            Some(d) if d.exit_code == 0 => "scratch directory removed".into(),
+            Some(d) => format!("scratch cleanup failed: {}", tail_chars(&d.stderr, 200)),
+            None => "scratch cleanup: unexpected response".into(),
+        },
+        Ok((false, _)) => "scratch cleanup: HTTP error".into(),
+        Err(e) => format!("scratch cleanup: {}", e.without_url()),
+    }
+}
+
 fn stop_early(mut report: RunReport, reason: &str) -> RunReport {
     eprintln!("STOPPING EARLY: non-retryable Archil response; no further calls sent. {reason}");
     report.environment.notes.push_str(&format!(" RUN STOPPED EARLY after a non-retryable API response: {reason}"));
@@ -236,12 +258,19 @@ pub fn run(runs: usize, size_mib: usize, fanout_levels: &[usize], parallel: usiz
     suite.sort_by(|a, b| a.started_ms.unwrap_or(0.0).total_cmp(&b.started_ms.unwrap_or(0.0)));
     report.observations.extend(suite);
     if let Some(reason) = fatal_reason { return Ok(stop_early(report, &reason)); }
+    run_fanout(&api, &mut report, fanout_levels, runs, &scope, size_mib, run_start)?;
+    let outcome = cleanup_scope(&api, &scope);
+    println!("Cleanup: {outcome}");
+    report.environment.notes.push_str(&format!(" Cleanup: {outcome}."));
+    Ok(report)
+}
 
+fn run_fanout(api: &Arc<ArchilClient>, report: &mut RunReport, fanout_levels: &[usize], runs: usize, scope: &str, size_mib: usize, run_start: Instant) -> Result<(), String> {
     // Fan-out of the read-only stat task at each concurrency level.
     for &fanout in fanout_levels {
         for trial in 0..runs {
             let handles: Vec<_> = (0..fanout).map(|_| {
-                let (api, scope) = (Arc::clone(&api), scope.clone());
+                let (api, scope) = (Arc::clone(api), scope.to_owned());
                 let submitted = run_start.elapsed().as_secs_f64() * 1000.0;
                 std::thread::spawn(move || {
                     let (mut obs, fatal) = exec_task(&api, "stat", trial, fanout, &scope, size_mib);
@@ -258,10 +287,14 @@ pub fn run(runs: usize, size_mib: usize, fanout_levels: &[usize], parallel: usiz
                 report.observations.push(obs);
             }
             println!("fanout-stat: {fanout} concurrent request(s), round {}", trial + 1);
-            if let Some(reason) = fatal_reason { return Ok(stop_early(report, &reason)); }
+            if let Some(reason) = fatal_reason {
+                let stopped = stop_early(std::mem::replace(report, RunReport::empty("archil", String::new(), 0, 0)), &reason);
+                *report = stopped;
+                return Ok(());
+            }
         }
     }
-    Ok(report)
+    Ok(())
 }
 
 #[cfg(test)]

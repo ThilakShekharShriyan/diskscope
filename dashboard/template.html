@@ -62,7 +62,7 @@
       <div class="ph"><div class="eyebrow">03 · Where the time goes</div><div><h2>Anatomy of a serverless call</h2><p>Archil reports queue and execute time for every call; the guest times its own work; the client times the round-trip. Default image first, then a no-op on every other exec configuration.</p></div></div>
       <div class="chart" id="anatomyChart"></div>
       <p class="insight" id="anatomyInsight"></p>
-      <p class="foot">Segments are per-phase medians, so they sum to roughly — not exactly — the median total. <em>Start-up · commit</em> = Archil execute − measured work: interpreter start, untimed setup, and the commit Archil performs when a command that wrote data exits. <em>Network · API</em> = client round-trip − Archil total.</p>
+      <p class="foot">Segments are per-phase medians, so they sum to roughly — not exactly — the median total. <em>Start-up · commit</em> = Archil execute − measured work: interpreter start, untimed setup and cleanup inside the guest, and the ~70 ms commit Archil performs when a command that wrote data exits. <em>Network · API</em> = client round-trip − Archil total.</p>
     </section>
 
     <section class="panel" id="slowdown">
@@ -97,9 +97,9 @@
     <section class="panel" id="findings">
       <div class="ph"><div class="eyebrow">09 · Platform findings</div><div><h2>What we reported to Archil</h2><p>Each is reproducible with a few curl calls — full repros in <a href="https://github.com/ThilakShekharShriyan/diskscope/blob/main/ARCHIL-FINDINGS.md">ARCHIL-FINDINGS.md</a>.</p></div></div>
       <div class="findings">
-        <div><h3>Cross-exec deletes fail with EROFS</h3><p>An exec cannot unlink or rmdir anything inside a directory created by an earlier exec — even a file it just created. Inside one sandbox, the same workload cleans up without error.</p></div>
-        <div><h3>SQLite databases break across execs</h3><p>A database created in one exec gets <code>disk I/O error</code> on the next exec's commit, and is then unreadable. <code>journal_mode=TRUNCATE</code> avoids it.</p></div>
-        <div><h3>Writes pay a commit at exit</h3><p>An exec that wrote data spends ~120 ms more in <em>execute</em> than one that didn't; a persistent sandbox worker avoids it entirely.</p></div>
+        <div><h3>Default execs can't delete earlier files</h3><p>The single-disk exec mount holds no delegation checkout, so removing anything an earlier exec created fails — reported as a misleading <code>EROFS</code>. <code>checkoutPaths</code> or a <code>conditional</code> mount fixes it.</p></div>
+        <div><h3>SQLite breaks across execs</h3><p>A database created in one exec gets <code>disk I/O error</code> on the next exec's commit and is then unreadable from a default exec. Check out the directory, or use <code>journal_mode=TRUNCATE</code>.</p></div>
+        <div><h3>Writes pay a commit at exit</h3><p>A shell command that writes one file has ~70 ms more <em>execute</em> time than <code>true</code> (76 ms vs 4 ms). A persistent sandbox worker avoids it.</p></div>
         <div><h3>The image choice is a 4.5× queue difference</h3><p>Default image: ~32 ms queue from the warm pool. <code>python:3.13-slim</code>: ~145 ms, booted on demand. The default image already ships Python 3.10.</p></div>
       </div>
     </section>
