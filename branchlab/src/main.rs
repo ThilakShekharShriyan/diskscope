@@ -36,6 +36,8 @@ enum SubCmd {
         dir: PathBuf,
         #[arg(long, default_value = "results/state-local.json")]
         output: PathBuf,
+        #[command(flatten)]
+        opts: CaseOpts,
     },
     /// Run state handoff tests against an EXISTING dedicated Archil disk.
     Archil {
@@ -47,8 +49,25 @@ enum SubCmd {
         fanout: usize,
         #[arg(long, default_value = "results/state-archil.json")]
         output: PathBuf,
+        #[command(flatten)]
+        opts: CaseOpts,
     },
 }
+
+#[derive(clap::Args, Clone)]
+struct CaseOpts {
+    /// Comma-separated cases: handoff, sqlite, readfan, writers, semantics, visibility.
+    #[arg(long, value_delimiter = ',', default_value = "handoff,sqlite,readfan,writers,semantics")]
+    cases: Vec<String>,
+    /// visibility: how long the long-lived reader polls before giving up (5..280 s).
+    #[arg(long, default_value_t = 120)]
+    cap_secs: u64,
+    /// visibility: seconds between submitting the reader and submitting the writer.
+    #[arg(long, default_value_t = 6)]
+    writer_delay_secs: u64,
+}
+
+const CASES: [&str; 6] = ["handoff", "sqlite", "readfan", "writers", "semantics", "visibility"];
 
 #[derive(Clone)]
 enum Backend {
@@ -75,6 +94,9 @@ struct Observation {
     operations: Option<u64>,
     bytes: Option<u64>,
     error: Option<String>,
+    /// Structured guest output for semantics and visibility probes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    detail: Option<Value>,
 }
 
 #[derive(Serialize)]
@@ -129,7 +151,7 @@ struct GuestResult {
     elapsed_ms: f64,
     operations: u64,
     bytes: u64,
-    detail: String,
+    detail: Value,
 }
 
 fn endpoint(region: &str) -> Result<&'static str, String> {
@@ -180,14 +202,14 @@ fn unique_run_id() -> String {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn request(backend: &Backend, action: &str, base: &str, size_kib: usize, worker: usize, fanout: usize) -> (f64, Option<ExecData>, Option<String>) {
+fn request(backend: &Backend, action: &str, base: &str, size_kib: usize, worker: usize, fanout: usize, param: u64) -> (f64, Option<ExecData>, Option<String>) {
     let start = Instant::now();
     match backend {
         Backend::Local => {
             let child = Command::new("python3")
-                .arg("-c").arg(GUEST)
+                .arg("-S").arg("-c").arg(GUEST)
                 .arg(action).arg(base).arg(size_kib.to_string())
-                .arg(worker.to_string()).arg(fanout.to_string())
+                .arg(worker.to_string()).arg(fanout.to_string()).arg(param.to_string())
                 .output();
             let wall_ms = start.elapsed().as_secs_f64() * 1_000.0;
             match child {
@@ -211,12 +233,12 @@ fn request(backend: &Backend, action: &str, base: &str, size_kib: usize, worker:
             // runs through the multi-disk endpoint with a conditional mount at /mnt/archil/d.
             let (url, body) = if action == "cleanup" {
                 let mounted = base.replacen("/mnt/archil/", "/mnt/archil/d/", 1);
-                let cmd = format!("python3 -c {} {} {} {size_kib} {worker} {fanout}",
+                let cmd = format!("python3 -S -c {} {} {} {size_kib} {worker} {fanout} {param}",
                     sh_quote(GUEST), sh_quote(action), sh_quote(&mounted));
                 (format!("{base_url}/api/exec"),
                  json!({"disks": {"d": {"disk": disk_id, "conditional": true}}, "command": cmd}))
             } else {
-                let cmd = format!("python3 -c {} {} {} {size_kib} {worker} {fanout}",
+                let cmd = format!("python3 -S -c {} {} {} {size_kib} {worker} {fanout} {param}",
                     sh_quote(GUEST), sh_quote(action), sh_quote(base));
                 (format!("{base_url}/api/disks/{disk_id}/exec"), json!({"command": cmd}))
             };
@@ -256,13 +278,13 @@ fn request(backend: &Backend, action: &str, base: &str, size_kib: usize, worker:
 
 #[allow(clippy::too_many_arguments)]
 fn observe(backend: &Backend, action: &str, task: &str, trial: usize, fanout: usize,
-           base: &str, size_kib: usize, worker: usize) -> Observation {
-    let (wall, data, error) = request(backend, action, base, size_kib, worker, fanout);
+           base: &str, size_kib: usize, worker: usize, param: u64) -> Observation {
+    let (wall, data, error) = request(backend, action, base, size_kib, worker, fanout, param);
     let mut o = Observation {
         task: task.into(), trial, fanout, ok: false,
         client_wall_ms: wall, remote_total_ms: None, remote_queue_ms: None,
         remote_execute_ms: None, work_ms: None,
-        operations: None, bytes: None, error,
+        operations: None, bytes: None, error, detail: None,
     };
     if let Some(d) = data {
         if let Some(t) = d.timing {
@@ -280,6 +302,7 @@ fn observe(backend: &Backend, action: &str, task: &str, trial: usize, fanout: us
                     o.operations = Some(g.operations);
                     o.bytes = Some(g.bytes);
                     if !g.valid { o.error = Some(format!("Integrity check failed: {}", g.detail)); }
+                    if g.detail.is_object() { o.detail = Some(g.detail); }
                 }
                 Err(e) => o.error = Some(format!("Guest JSON parse failed: {e}")),
             },
@@ -296,7 +319,7 @@ fn observe(backend: &Backend, action: &str, task: &str, trial: usize, fanout: us
 fn panic_observation(task: &str, trial: usize, fanout: usize) -> Observation {
     Observation { task: task.to_owned(), trial, fanout, ok: false, client_wall_ms: 0.0,
         remote_total_ms: None, remote_queue_ms: None, remote_execute_ms: None,
-        work_ms: None, operations: None, bytes: None,
+        work_ms: None, operations: None, bytes: None, detail: None,
         error: Some("Rust worker thread panicked; no latency measurement available".into()) }
 }
 
@@ -316,12 +339,12 @@ fn scoped(base_prefix: &str, id: &str, trial: usize, case: &str) -> String {
 #[allow(clippy::too_many_arguments)]
 fn call(report: &mut RunReport, backend: &Backend, action: &str, task: &str,
         trial: usize, fanout: usize, base: &str, size_kib: usize, worker: usize) -> bool {
-    add(report, observe(backend, action, task, trial, fanout, base, size_kib, worker))
+    add(report, observe(backend, action, task, trial, fanout, base, size_kib, worker, 0))
 }
 
 #[allow(clippy::too_many_arguments)]
 fn run_case(report: &mut RunReport, backend: &Backend, case: &str, trial: usize,
-            fanout: usize, size_kib: usize, prefix: &str, id: &str) {
+            fanout: usize, size_kib: usize, prefix: &str, id: &str, opts: &CaseOpts) {
     let base = scoped(prefix, id, trial, case);
     let init_ok = call(report, backend, "init", &format!("{case}/init"), trial, fanout, &base, size_kib, 0);
     if init_ok {
@@ -343,7 +366,7 @@ fn run_case(report: &mut RunReport, backend: &Backend, case: &str, trial: usize,
                     for idx in 0..fanout {
                         let api = Arc::clone(&api);
                         let base = base.clone();
-                        handles.push(std::thread::spawn(move || observe(&api, "read", "readfan/parallel-read", trial, fanout, &base, size_kib, idx)));
+                        handles.push(std::thread::spawn(move || observe(&api, "read", "readfan/parallel-read", trial, fanout, &base, size_kib, idx, 0)));
                     }
                     for h in handles {
                         match h.join() {
@@ -359,7 +382,7 @@ fn run_case(report: &mut RunReport, backend: &Backend, case: &str, trial: usize,
                 for idx in 0..fanout {
                     let api = Arc::clone(&api);
                     let base = base.clone();
-                    handles.push(std::thread::spawn(move || observe(&api, "parallel-write", "writers/disjoint-path", trial, fanout, &base, size_kib, idx)));
+                    handles.push(std::thread::spawn(move || observe(&api, "parallel-write", "writers/disjoint-path", trial, fanout, &base, size_kib, idx, 0)));
                 }
                 let mut all_ok = true;
                 for h in handles {
@@ -373,21 +396,72 @@ fn run_case(report: &mut RunReport, backend: &Backend, case: &str, trial: usize,
                 call(report, backend, "parallel-check", "writers/reconcile", trial, fanout, &base, size_kib, 0);
                 if !all_ok { eprintln!("One or more independent writers failed; see raw results"); }
             }
-            _ => unreachable!("Only fixed cases are used"),
+            "semantics" => {
+                // Exec 2 creates entries; exec 3 and 4 (fresh microVMs) try to change them,
+                // without and with `archil checkout` of the parent directory.
+                if call(report, backend, "sem-setup", "semantics/setup", trial, 1, &base, size_kib, 0) {
+                    call(report, backend, "sem-probe", "semantics/probe-plain", trial, 1, &base, size_kib, 0);
+                    call(report, backend, "sem-probe-checkout", "semantics/probe-checkout", trial, 1, &base, size_kib, 0);
+                }
+            }
+            "visibility" => {
+                if call(report, backend, "vis-setup", "visibility/setup", trial, 1, &base, size_kib, 0) {
+                    // The reader primes its caches, then polls; the writer starts after a delay.
+                    let api = Arc::new(backend.clone());
+                    let (rb, cap) = (base.clone(), opts.cap_secs);
+                    let reader = std::thread::spawn(move ||
+                        observe(&api, "vis-reader", "visibility/reader", trial, 2, &rb, size_kib, 0, cap));
+                    std::thread::sleep(Duration::from_secs(opts.writer_delay_secs));
+                    let writer = observe(backend, "vis-writer", "visibility/writer", trial, 2, &base, size_kib, 0, 0);
+                    let mut reader = reader.join().unwrap_or_else(|_| panic_observation("visibility/reader", trial, 2));
+                    check_visibility_order(&mut reader, &writer);
+                    add(report, writer);
+                    add(report, reader);
+                }
+            }
+            _ => unreachable!("cases are validated in run()"),
         }
     }
     // Cleanup even when a preceding stage fails. Only the scoped directory is removed.
     call(report, backend, "cleanup", &format!("{case}/cleanup"), trial, fanout, &base, size_kib, 0);
 }
 
+/// A trial only measures staleness if the reader had primed its caches before the writer began.
+fn check_visibility_order(reader: &mut Observation, writer: &Observation) {
+    let primed = reader.detail.as_ref().and_then(|d| d["t_prime"].as_f64());
+    let started = writer.detail.as_ref().and_then(|d| d["t_start"].as_f64());
+    if let (Some(p), Some(w)) = (primed, started) {
+        if p >= w {
+            reader.ok = false;
+            reader.error = Some(format!("Invalid trial: reader primed {:.2} s after the writer started; raise --writer-delay-secs", p - w));
+        }
+    } else if reader.ok {
+        reader.ok = false;
+        reader.error = Some("Invalid trial: missing reader or writer timestamps".into());
+    }
+}
+
+fn calls_for(case: &str, fanout: usize) -> usize {
+    match case {
+        "handoff" | "sqlite" => 4,
+        "readfan" | "writers" => 3 + fanout,
+        "semantics" | "visibility" => 5,
+        _ => 0,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run(use_archil: bool, runs: usize, size_kib: usize, fanout: usize,
-       dir: &Path, output: &Path) -> Result<(), String> {
-    if !(1..=8).contains(&runs) { return Err("runs must be 1..8".into()); }
+       dir: &Path, output: &Path, opts: &CaseOpts) -> Result<(), String> {
+    if !(1..=10).contains(&runs) { return Err("runs must be 1..10".into()); }
     if !(1..=4096).contains(&size_kib) { return Err("size-kib must be 1..4096".into()); }
     if !(1..=4).contains(&fanout) { return Err("fanout must be 1..4".into()); }
-    // 4 for handoff, 4 for sqlite, 3+fanout for readfan and disjoint writers.
-    let upper_bound = runs * (14 + 2 * fanout);
-    if upper_bound > 120 { return Err(format!("Refusing estimated {upper_bound} calls (> 120); lower runs or fanout")); }
+    if !(5..=280).contains(&opts.cap_secs) { return Err("cap-secs must be 5..280 (Archil's exec limit is 300 s)".into()); }
+    if let Some(bad) = opts.cases.iter().find(|c| !CASES.contains(&c.as_str())) {
+        return Err(format!("unknown case {bad:?}; expected one of {}", CASES.join(", ")));
+    }
+    let upper_bound: usize = runs * opts.cases.iter().map(|c| calls_for(c, fanout)).sum::<usize>();
+    if upper_bound > 200 { return Err(format!("Refusing estimated {upper_bound} calls (> 200); lower runs or fanout")); }
 
     let (backend, region, suffix) = new_backend(use_archil)?;
     let prefix = if use_archil {
@@ -413,15 +487,18 @@ fn run(use_archil: bool, runs: usize, size_kib: usize, fanout: usize,
             image: use_archil.then(|| IMAGE.to_owned()),
             size_mib: size_kib.div_ceil(1024),
             runs_per_task: runs,
-            notes: "BRANCHLAB V0.2; safe fresh-process or Archil fresh-VM state handoff. No host crash or lost-AZ test. Local and Archil have different hardware. 'Fresh VM' reads do not measure a long-lived client's directory-cache TTL. A successful fsync + cross-VM read is not proof of catastrophic-host-failure durability. Each trial writes to unique isolated paths; independent writers never intentionally share files. No branches/checkpoints are created. Archil uses its default image; cleanup runs with a conditional mount via POST /api/exec; SQLite uses journal_mode=TRUNCATE (DELETE/WAL fail across execs, ARCHIL-FINDINGS.md #2). Archil commits a writing exec at exit, so a fresh-VM read after write-fsync cannot separate fsync durability from that exit commit.".into(),
+            notes: "BRANCHLAB V0.3. Each step is a fresh process (local) or a fresh Archil microVM (default image, python3 -S). No host crash or lost-AZ test. Local and Archil have different hardware. handoff/sqlite/readfan/writers test FRESH-EXECUTION visibility, not a long-lived client's caches; the visibility case tests those with one long-lived reader exec. Archil commits a writing exec at exit, so a fresh-VM read after write-fsync cannot separate fsync durability from that exit commit. Independent writers never share a file. SQLite in sqlite/* uses journal_mode=TRUNCATE; semantics/* records what an exec can do to entries another exec created, with and without `archil checkout`. Cleanup runs with a conditional mount via POST /api/exec. No branches/checkpoints are created.".into(),
         },
         observations: Vec::new(),
     };
 
     println!("BranchLab {backend_name}: <= {upper_bound} calls; {runs} trial(s); {size_kib} KiB files; fanout {fanout}");
+    if opts.cases.iter().any(|c| c == "visibility") {
+        println!("visibility: each trial holds one reader exec open for up to {} s", opts.cap_secs);
+    }
     for trial in 0..runs {
-        for case in ["handoff", "sqlite", "readfan", "writers"] {
-            run_case(&mut report, &backend, case, trial, fanout, size_kib, &prefix, &id);
+        for case in &opts.cases {
+            run_case(&mut report, &backend, case, trial, fanout, size_kib, &prefix, &id, opts);
         }
     }
     if let Some(parent) = output.parent() {
@@ -437,8 +514,8 @@ fn run(use_archil: bool, runs: usize, size_kib: usize, fanout: usize,
 fn main() {
     let cli = Cli::parse();
     let result = match cli.command {
-        SubCmd::Local { runs, size_kib, fanout, dir, output } => run(false, runs, size_kib, fanout, &dir, &output),
-        SubCmd::Archil { runs, size_kib, fanout, output } => run(true, runs, size_kib, fanout, Path::new("."), &output),
+        SubCmd::Local { runs, size_kib, fanout, dir, output, opts } => run(false, runs, size_kib, fanout, &dir, &output, &opts),
+        SubCmd::Archil { runs, size_kib, fanout, output, opts } => run(true, runs, size_kib, fanout, Path::new("."), &output, &opts),
     };
     if let Err(e) = result {
         eprintln!("BranchLab error: {e}");

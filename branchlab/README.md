@@ -4,16 +4,26 @@
 
 This is an **additive subdirectory**, not a replacement for your existing DiskScope repo. It emits the existing DiskScope `schema_version: 1` JSON format, so the original `diskscope report` generator can import it.
 
-## What it actually tests
+## What it tests
 
-Four scenarios, each with independent command executions:
+Six cases; every step is its own command execution (a fresh Archil microVM, or a fresh local process):
 
-1. **Handoff:** create a file with `fsync(file)` + `fsync(directory)`; in a *new process/microVM*, verify its deterministic bytes and SHA-256-equivalent exact content check.
-2. **SQLite recovery:** execute 16 `synchronous=FULL` commits, close the DB; reopen read-only in another execution, validate `PRAGMA integrity_check`, row count and sum.
-3. **Fan-out reads:** create a file, launch several **new** readers concurrently, require each reader to verify the same expected bytes.
-4. **Independent-path writers:** pre-create one directory per worker, have multiple independent executions write separate files concurrently; read them back and verify exact content. **No same-file concurrent writes.**
+1. **handoff** — write a file with `fsync(file)` + `fsync(dir)`; verify every byte from a new execution.
+2. **sqlite** — 16 `synchronous=FULL` commits; reopen read-only elsewhere, check `integrity_check`, row count and sum.
+3. **readfan** — one writer, then several concurrent fresh readers of the same file.
+4. **writers** — concurrent writers to separate, pre-created directories, then a reconcile read. No shared-file races.
+5. **semantics** — one execution creates entries; a later one tries ten operations on them (overwrite, append,
+   create, `mkdir`, `chmod`, rename, write-temp-then-rename, unlink ×2, SQLite create), once plain and once after
+   `archil checkout` of the folder. Records each outcome (`ok` / errno).
+6. **visibility** (opt-in) — one long-lived reader primes its caches (negative `open`/`stat`, listings, attributes,
+   an open fd), then polls each path in its own directory; a separate execution creates and overwrites files after
+   `--writer-delay-secs`. Records when each path first sees the change, up to `--cap-secs` (≤ 280 s, under Archil's
+   5-minute exec limit). A trial is invalid unless the reader primed before the writer started.
 
-Every stage records client wall time, plus Archil `queueMs` / `executeMs` / `totalMs` when returned, and a PASS/FAIL for correctness. Per-trial stdout diagnostics are NOT published by default.
+Default cases: `handoff,sqlite,readfan,writers,semantics`; add `--cases visibility` explicitly — each trial holds a
+reader exec open for up to `--cap-secs`.
+
+Every step records client wall time, Archil `queueMs` / `executeMs` / `totalMs`, the guest's own timing, and PASS/FAIL.
 
 ## Safety
 
@@ -21,7 +31,7 @@ Every stage records client wall time, plus Archil `queueMs` / `executeMs` / `tot
 - Uses `/mnt/archil/.diskscope/branchlab-<unique-run-id>` for all remote files.
 - Guest deletion is restricted to a verified `branchlab-...` scratch folder directly under `.diskscope`; it will never delete the disk, the `.diskscope` parent, or arbitrary paths.
 - No disk checkpoints, branches, host termination, `--force` ownership takeovers, arbitrary shell commands, or shared-file writer races.
-- Defaults: 2 repetitions, 4 KiB payload, 2 concurrent workers, 36 API calls in a full run. Hard cap: 120 estimated calls.
+- Defaults: 2 repetitions, 4 KiB payload, 2 concurrent workers, 46 API calls in a full run. Hard cap: 200 estimated calls.
 - Cleanup is attempted even if a test fails. **A network failure can leave scratch data behind**; remove it with a `conditional` mount via `POST /api/exec`.
 - Results may contain runtime error text; inspect the generated dashboard and JSON before publishing. Don't commit API keys, `.env` files, or secrets.
 - A successful cross-VM read after `fsync` is not proof of resilience to an AZ outage or permanent host loss; no such fault is injected.

@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "backend": "local-state",
+  "run_id": "60496-1794543659088954000",
+  "timestamp_unix_secs": 1794543659,
+  "environment": {
+    "region": null,
+    "disk_id_suffix": null,
+    "host_os": "macos",
+    "workload_language": "Python 3 stdlib guest, Rust coordinator",
+    "image": null,
+    "size_mib": 1,
+    "runs_per_task": 2,
+    "notes": "BRANCHLAB V0.3. Each step is a fresh process (local) or a fresh Archil microVM (default image, python3 -S). No host crash or lost-AZ test. Local and Archil have different hardware. handoff/sqlite/readfan/writers test FRESH-EXECUTION visibility, not a long-lived client's caches; the visibility case tests those with one long-lived reader exec. Archil commits a writing exec at exit, so a fresh-VM read after write-fsync cannot separate fsync durability from that exit commit. Independent writers never share a file. SQLite in sqlite/* uses journal_mode=TRUNCATE; semantics/* records what an exec can do to entries another exec created, with and without `archil checkout`. Cleanup runs with a conditional mount via POST /api/exec. No branches/checkpoints are created."
+  },
+  "observations": [
+    {
+      "task": "visibility/init",
+      "trial": 0,
+      "fanout": 2,
+      "ok": true,
+      "client_wall_ms": 20.470499999999998,
+      "remote_total_ms": null,
+      "remote_queue_ms": null,
+      "remote_execute_ms": null,
+      "work_ms": 0.170791,
+      "operations": 1,
+      "bytes": 0,
+      "error": null
+    },
+    {
+      "task": "visibility/setup",
+      "trial": 0,
+      "fanout": 1,
+      "ok": true,
+      "client_wall_ms": 20.278208999999997,
+      "remote_total_ms": null,
+      "remote_queue_ms": null,
+      "remote_execute_ms": null,
+      "work_ms": 0.816125,
+      "operations": 1,
+      "bytes": 0,
+      "error": null
+    },
+    {
+      "task": "visibility/writer",
+      "trial": 0,
+      "fanout": 2,
+      "ok": true,
+      "client_wall_ms": 56.489208,
+      "remote_total_ms": null,
+      "remote_queue_ms": null,
+      "remote_execute_ms": null,
+      "work_ms": 2.065167,
+      "operations": 1,
+      "bytes": 0,
+      "error": null,
+      "detail": {
+        "t_fsynced": 1794543671.187619,
+        "t_start": 1794543671.185556
+      }
+    },
+    {
+      "task": "visibility/reader",
+      "trial": 0,
+      "fanout": 2,
+      "ok": true,
+      "client_wall_ms": 12093.532041,
+      "remote_total_ms": null,
+      "remote_queue_ms": null,
+      "remote_execute_ms": null,
+      "work_ms": 12070.083792,
+      "operations": 504,
+      "bytes": 0,
+      "error": null,
+      "detail": {
+        "cap_s": 30,
+        "first_seen": {
+          "new file · listdir() empty dir": 1794543671.1919649,
+          "new file · listdir() non-empty dir": 1794543671.1919942,
+          "new file · open()": 1794543671.191925,
+          "new file · open(), readdir expiry 0": 1794543671.1920252,
+          "new file · stat()": 1794543671.191934,
+          "overwrite · already-open fd": 1794543671.1920698,
+          "overwrite · re-open()": 1794543671.1920588,
+          "overwrite · stat() size": 1794543671.192065
+        },
+        "polls": 504,
+        "primed": {
+          "expiry0": "no archil CLI (local run)",
+          "new-list": [],
+          "new-list-full": [
+            "y0"
+          ],
+          "new-open": "ENOENT",
+          "new-open-expiry0": "ENOENT",
+          "new-stat": "ENOENT",
+          "old-fd": 100,
+          "old-open": 100,
+          "old-stat": 100
+        },
+        "t_end": 1794543671.217092,
+        "t_prime": 1794543659.151044
+      }
+    },
+    {
+      "task": "visibility/cleanup",
+      "trial": 0,
+      "fanout": 2,
+      "ok": true,
+      "client_wall_ms": 36.974167,
+      "remote_total_ms": null,
+      "remote_queue_ms": null,
+      "remote_execute_ms": null,
+      "work_ms": 3.734459,
+      "operations": 1,
+      "bytes": 0,
+      "error": null
+    },
+    {
+      "task": "visibility/init",
+      "trial": 1,
+      "fanout": 2,
+      "ok": true,
+      "client_wall_ms": 20.691709,
+      "remote_total_ms": null,
+      "remote_queue_ms": null,
+      "remote_execute_ms": null,
+      "work_ms": 0.174625,
+      "operations": 1,
+      "bytes": 0,
+      "error": null
+    },
+    {
+      "task": "visibility/setup",
+      "trial": 1,
+      "fanout": 1,
+      "ok": true,
+      "client_wall_ms": 19.438875000000003,
+      "remote_total_ms": null,
+      "remote_queue_ms": null,
+      "remote_execute_ms": null,
+      "work_ms": 0.841791,
+      "operations": 1,
+      "bytes": 0,
+      "error": null
+    },
+    {
+      "task": "visibility/writer",
+      "trial": 1,
+      "fanout": 2,
+      "ok": true,
+      "client_wall_ms": 57.950416999999995,
+      "remote_total_ms": null,
+      "remote_queue_ms": null,
+      "remote_execute_ms": null,
+      "work_ms": 1.986583,
+      "operations": 1,
+      "bytes": 0,
+      "error": null,
+      "detail": {
+        "t_fsynced": 1794543683.359599,
+        "t_start": 1794543683.357614
+      }
+    },
+    {
+      "task": "visibility/reader",
+      "trial": 1,
+      "fanout": 2,
+      "ok": true,
+      "client_wall_ms": 12099.311958,
+      "remote_total_ms": null,
+      "remote_queue_ms": null,
+      "remote_execute_ms": null,
+      "work_ms": 12077.02925,
+      "operations": 502,
+      "bytes": 0,
+      "error": null,
+      "detail": {
+        "cap_s": 30,
+        "first_seen": {
+          "new file · listdir() empty dir": 1794543683.372693,
+          "new file · listdir() non-empty dir": 1794543683.372719,
+          "new file · open()": 1794543683.372654,
+          "new file · open(), readdir expiry 0": 1794543683.372749,
+          "new file · stat()": 1794543683.3726609,
+          "overwrite · already-open fd": 1794543683.3727949,
+          "overwrite · re-open()": 1794543683.3727832,
+          "overwrite · stat() size": 1794543683.372789
+        },
+        "polls": 502,
+        "primed": {
+          "expiry0": "no archil CLI (local run)",
+          "new-list": [],
+          "new-list-full": [
+            "y0"
+          ],
+          "new-open": "ENOENT",
+          "new-open-expiry0": "ENOENT",
+          "new-stat": "ENOENT",
+          "old-fd": 100,
+          "old-open": 100,
+          "old-stat": 100
+        },
+        "t_end": 1794543683.3938649,
+        "t_prime": 1794543671.3209028
+      }
+    },
+    {
+      "task": "visibility/cleanup",
+      "trial": 1,
+      "fanout": 2,
+      "ok": true,
+      "client_wall_ms": 37.454875,
+      "remote_total_ms": null,
+      "remote_queue_ms": null,
+      "remote_execute_ms": null,
+      "work_ms": 3.887875,
+      "operations": 1,
+      "bytes": 0,
+      "error": null
+    }
+  ]
+}

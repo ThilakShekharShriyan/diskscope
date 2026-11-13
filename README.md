@@ -68,21 +68,25 @@ Approximate 95% intervals for every ratio are on the [dashboard](https://thilaks
 
 Reported to Archil with minimal curl repros in [`ARCHIL-FINDINGS.md`](ARCHIL-FINDINGS.md):
 
-1. **Default execs can't delete what earlier execs created — and report `EROFS`.** This is Archil's delegation model: the single-disk exec mount takes no checkout. Mounting through `POST /api/exec` with `checkoutPaths` or `conditional: true` works. DiskScope now removes its scratch directory that way after every run.
-2. **SQLite's default journal breaks across execs.** A database created in one exec fails the next exec's commit (`disk I/O error`) and is then unreadable from a default exec. Check out the directory, or use `PRAGMA journal_mode=TRUNCATE`.
-3. **Costs worth documenting:** ~70 ms commit per writing exec; ~430 ms per `sandbox.exec()` call; ~110 ms extra queue for a custom image, with occasional 1.3–3.2 s slow starts; the default image already ships Python 3.10.
+1. **Shared-mode execs can't rename, `chmod` or delete another exec's files (`EROFS`).** Documented for deletes; renames — including write-temp-then-rename — aren't mentioned. Running `archil checkout <dir>` inside the command fixes it in ~14 ms; DiskScope cleans up with a `conditional` mount.
+2. **SQLite fails in any directory an earlier exec created** — even creating a database — and a failed commit leaves it unreadable. `archil checkout` fixes and recovers it; `journal_mode=TRUNCATE` avoids it.
+3. **A missing file stays missing for 30 s.** After a lookup fails, `open()` and `stat()` keep returning `ENOENT` for 30 s even once another exec has written the file; `--readdir-expiry 0` doesn't help, `archil invalidate-cache` does.
+4. **Costs worth documenting:** ~70 ms commit per writing exec; ~430 ms per `sandbox.exec()` call; ~110 ms extra queue for a custom image, with occasional 1.3–3.2 s slow starts; the default image already ships Python 3.10.
 
 ## Phase 2 · BranchLab: state correctness across microVMs
 
-[`branchlab/`](branchlab/) asks a different question: does state written in one fresh microVM arrive intact in the next? Each step runs as its own exec — write a file with `fsync`, then verify every byte from a new VM; commit 16 SQLite transactions, then reopen read-only and run `integrity_check`; fan out parallel readers of one file; and run parallel writers to separate files, then reconcile. **First smoke run: 18/18 Archil steps passed**, with the scratch directory removed afterwards. [Correctness dashboard →](https://thilakshekharshriyan.github.io/diskscope/branchlab.html)
+[`branchlab/`](branchlab/) asks whether state written in one microVM is right in the next. [Correctness dashboard →](https://thilakshekharshriyan.github.io/diskscope/branchlab.html)
+
+- **Handoff, SQLite reopen, parallel readers, disjoint writers:** 184 of 184 Archil steps passed over 8 trials, every byte checked (≤31% failure rate at 95% per step — evidence, not proof).
+- **Semantics:** in a directory another exec created, a default exec can overwrite, append and create, but rename, write-temp-then-rename, `chmod`, delete and SQLite fail with `EROFS` — 8/8, identical every time. `archil checkout <dir>` inside the command fixes all ten operations in ~14 ms.
+- **Visibility:** a long-lived reader that has looked up a missing name keeps getting `ENOENT` for exactly **30 s after the lookup**, wherever the write lands (6/6 trials); `--readdir-expiry 0` doesn't change it, `archil invalidate-cache` does. Overwrites are seen on the next `open()`.
 
 ```bash
 set -a; source .env.local; set +a        # ARCHIL_API_KEY, ARCHIL_DISK_ID, ARCHIL_REGION
-cargo run --release --manifest-path branchlab/Cargo.toml -- archil --runs 1 --size-kib 4 --fanout 2 --output results/state-archil.json
-python3 branchlab/report.py data/branchlab/*.json results/state-archil.json --output docs/branchlab.html
+cargo run --release --manifest-path branchlab/Cargo.toml -- archil --runs 8 --output results/state-archil.json
+cargo run --release --manifest-path branchlab/Cargo.toml -- archil --runs 2 --cases visibility --writer-delay-secs 12 --output results/visibility.json
+python3 branchlab/report.py data/branchlab/*.json --output docs/branchlab.html
 ```
-
-It checks fresh-execution visibility, not the directory cache of a long-lived mounted client, and it injects no failures — see the limits on the dashboard.
 
 ## Methodology
 
