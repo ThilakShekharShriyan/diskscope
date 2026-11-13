@@ -1,8 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1016" height="506" viewBox="0 0 1016 506" role="img" aria-label="Anatomy of a serverless call — median time per phase">
 <style>/* DiskScope chart tokens + mark classes — shared by the dashboard and the standalone README SVGs.
-   Palette: warm white / beige surfaces, black and grey ink. Series are separated by lightness
-   (near-black, mid grey, light grey) and always carry direct labels or a legend, so identity never
-   depends on hue — which also makes every chart colour-blind-safe by construction. */
+   Palette: warm white / beige surfaces, black and grey ink, and one accent hue — orange — for data.
+   Series are separated by lightness (dark, mid, light orange; validated as an ordinal ramp with the
+   light end >= 2:1 on the surface) and always carry direct labels or a legend, so identity never
+   depends on hue alone. */
 :root {
   color-scheme: light;
   --plane: #f6f3ec;      /* page: warm beige */
@@ -14,11 +15,12 @@
   --axis: #d2cabd;       /* reference lines */
   --border: rgba(22, 21, 19, 0.09);
   --wash: #f1ede4;       /* subtle fills */
-  /* series: lightness steps of one warm neutral */
-  --s1: #161513; --s2: #a0988b; --s3: #5e5951; --s4: #c9c1b4;
-  --s5: #161513; --s6: #a0988b; --s7: #5e5951; --s8: #c9c1b4;
-  /* anatomy phases: an ordinal ramp, darkest = the platform's own cost */
-  --ph-q: #161513; --ph-s: #6b665e; --ph-w: #a79f92; --ph-o: #dcd5c9;
+  /* series: archil exec = dark orange, local = light orange, archil sandbox = mid orange */
+  --s1: #a33a0b; --s2: #ef9a55; --s3: #dd6a22; --s4: #6e270a;
+  --s5: #a33a0b; --s6: #ef9a55; --s7: #dd6a22; --s8: #6e270a;
+  /* anatomy phases: an ordinal orange ramp, darkest = the platform's own queue */
+  --ph-q: #6e270a; --ph-s: #b44a16; --ph-w: #e07a32; --ph-o: #f0a463;
+  --accent: #a33a0b; --accent-wash: rgba(221, 106, 34, 0.12);
   --good: #3f6b3a; --critical: #9c3a2e;
 }
 .ds-chart { display: block; overflow: visible; font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -41,13 +43,13 @@
 .ds-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .ds-whisker { stroke-width: 2.5; stroke-linecap: round; }
 .ds-hit { fill: transparent; }
-.ds-warm, .ds-warm-key { fill: var(--surface); stroke: var(--muted); stroke-width: 1.5; }
+.ds-warm, .ds-warm-key { fill: var(--surface); stroke: var(--s3); stroke-width: 1.5; }
 .ds-ref-key { fill: var(--axis); }
 .f-s1 { fill: var(--s1); } .f-s2 { fill: var(--s2); } .f-s3 { fill: var(--s3); } .f-s4 { fill: var(--s4); }
 .f-s5 { fill: var(--s5); } .f-s6 { fill: var(--s6); } .f-s7 { fill: var(--s7); } .f-s8 { fill: var(--s8); }
 .st-s1 { stroke: var(--s1); } .st-s2 { stroke: var(--s2); } .st-s3 { stroke: var(--s3); } .st-s4 { stroke: var(--s4); }
 .st-s5 { stroke: var(--s5); } .st-s6 { stroke: var(--s6); } .st-s7 { stroke: var(--s7); } .st-s8 { stroke: var(--s8); }
-.ci-s1, .ci-s2, .ci-s3, .ci-s4, .ci-s5, .ci-s6, .ci-s7, .ci-s8 { fill: var(--ink); opacity: .07; }
+.ci-s1, .ci-s2, .ci-s3, .ci-s4, .ci-s5, .ci-s6, .ci-s7, .ci-s8 { fill: var(--accent-wash); }
 .f-phase-q { fill: var(--ph-q); } .f-phase-s { fill: var(--ph-s); } .f-phase-w { fill: var(--ph-w); } .f-phase-o { fill: var(--ph-o); }
 </style>
 <rect x="0.5" y="0.5" width="1015" height="505" rx="10" fill="var(--surface)" stroke="var(--grid)"/>

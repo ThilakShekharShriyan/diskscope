@@ -7,9 +7,10 @@
   <meta name="description" content="Reproducible microbenchmarks of Archil serverless exec, warm sandboxes and filesystem latency, measured with a Rust harness." />
   <meta name="color-scheme" content="light" />
   <style>/* DiskScope chart tokens + mark classes — shared by the dashboard and the standalone README SVGs.
-   Palette: warm white / beige surfaces, black and grey ink. Series are separated by lightness
-   (near-black, mid grey, light grey) and always carry direct labels or a legend, so identity never
-   depends on hue — which also makes every chart colour-blind-safe by construction. */
+   Palette: warm white / beige surfaces, black and grey ink, and one accent hue — orange — for data.
+   Series are separated by lightness (dark, mid, light orange; validated as an ordinal ramp with the
+   light end >= 2:1 on the surface) and always carry direct labels or a legend, so identity never
+   depends on hue alone. */
 :root {
   color-scheme: light;
   --plane: #f6f3ec;      /* page: warm beige */
@@ -21,11 +22,12 @@
   --axis: #d2cabd;       /* reference lines */
   --border: rgba(22, 21, 19, 0.09);
   --wash: #f1ede4;       /* subtle fills */
-  /* series: lightness steps of one warm neutral */
-  --s1: #161513; --s2: #a0988b; --s3: #5e5951; --s4: #c9c1b4;
-  --s5: #161513; --s6: #a0988b; --s7: #5e5951; --s8: #c9c1b4;
-  /* anatomy phases: an ordinal ramp, darkest = the platform's own cost */
-  --ph-q: #161513; --ph-s: #6b665e; --ph-w: #a79f92; --ph-o: #dcd5c9;
+  /* series: archil exec = dark orange, local = light orange, archil sandbox = mid orange */
+  --s1: #a33a0b; --s2: #ef9a55; --s3: #dd6a22; --s4: #6e270a;
+  --s5: #a33a0b; --s6: #ef9a55; --s7: #dd6a22; --s8: #6e270a;
+  /* anatomy phases: an ordinal orange ramp, darkest = the platform's own queue */
+  --ph-q: #6e270a; --ph-s: #b44a16; --ph-w: #e07a32; --ph-o: #f0a463;
+  --accent: #a33a0b; --accent-wash: rgba(221, 106, 34, 0.12);
   --good: #3f6b3a; --critical: #9c3a2e;
 }
 .ds-chart { display: block; overflow: visible; font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -48,13 +50,13 @@
 .ds-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .ds-whisker { stroke-width: 2.5; stroke-linecap: round; }
 .ds-hit { fill: transparent; }
-.ds-warm, .ds-warm-key { fill: var(--surface); stroke: var(--muted); stroke-width: 1.5; }
+.ds-warm, .ds-warm-key { fill: var(--surface); stroke: var(--s3); stroke-width: 1.5; }
 .ds-ref-key { fill: var(--axis); }
 .f-s1 { fill: var(--s1); } .f-s2 { fill: var(--s2); } .f-s3 { fill: var(--s3); } .f-s4 { fill: var(--s4); }
 .f-s5 { fill: var(--s5); } .f-s6 { fill: var(--s6); } .f-s7 { fill: var(--s7); } .f-s8 { fill: var(--s8); }
 .st-s1 { stroke: var(--s1); } .st-s2 { stroke: var(--s2); } .st-s3 { stroke: var(--s3); } .st-s4 { stroke: var(--s4); }
 .st-s5 { stroke: var(--s5); } .st-s6 { stroke: var(--s6); } .st-s7 { stroke: var(--s7); } .st-s8 { stroke: var(--s8); }
-.ci-s1, .ci-s2, .ci-s3, .ci-s4, .ci-s5, .ci-s6, .ci-s7, .ci-s8 { fill: var(--ink); opacity: .07; }
+.ci-s1, .ci-s2, .ci-s3, .ci-s4, .ci-s5, .ci-s6, .ci-s7, .ci-s8 { fill: var(--accent-wash); }
 .f-phase-q { fill: var(--ph-q); } .f-phase-s { fill: var(--ph-s); } .f-phase-w { fill: var(--ph-w); } .f-phase-o { fill: var(--ph-o); }
 
 /* Page chrome. Tokens live in chart-theme.css (inlined before this file). */
@@ -104,7 +106,7 @@ select { font: inherit; font-size: 13px; color: var(--ink); background: var(--su
   background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 14px) 52%, calc(100% - 9px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; padding: 2px; background: var(--surface); }
 .seg button { border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: 12.5px; padding: 3px 10px; border-radius: 5px; cursor: pointer; }
-.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
 .hint { font-size: 12px; color: var(--muted); margin-left: auto; }
 
 /* sections */
@@ -119,7 +121,7 @@ section.panel { padding: 56px 0 8px; border-bottom: 1px solid var(--border); }
 .insight { padding: 0; margin: 16px 0 0; color: var(--ink-2); font-size: 14.5px; max-width: 820px; }
 .insight:empty { display: none; }
 .insight strong { color: var(--ink); font-weight: 600; }
-.insight::before { content: "→  "; color: var(--muted); }
+.insight::before { content: "→  "; color: var(--accent); }
 
 /* findings list */
 .findings { display: grid; grid-template-columns: repeat(2, 1fr); border-top: 1px solid var(--ink); }
@@ -151,7 +153,7 @@ tr:hover td { background: var(--wash); }
 
 /* flamegraph */
 .flamebox { position: relative; border: 1px solid var(--border); border-radius: 10px; min-height: 140px; display: grid; place-items: center; padding: 16px; text-align: center; color: var(--muted); font-size: 13.5px; background: var(--surface); }
-.flamebox object { width: 100%; min-height: 200px; border: 0; display: block; filter: grayscale(1) sepia(.15) contrast(1.02); }
+.flamebox object { width: 100%; min-height: 200px; border: 0; display: block; }
 .flamebox object.probing { visibility: hidden; min-height: 0; height: 0; position: absolute; }
 input[type=file] { display: none; }
 
@@ -513,7 +515,7 @@ footer a { color: var(--ink-2); }
         if (st.ci) s += `<rect x="${x(st.ci[0]).toFixed(1)}" y="${cy - 7}" width="${Math.max(3, x(st.ci[1]) - x(st.ci[0])).toFixed(1)}" height="14" rx="7" class="ci-s${l.slot}"/>`;
         l.values.forEach((d, i) => {
           const cx = x(d.v).toFixed(1), jy = (cy + jitter(g.label + l.name, i, 6)).toFixed(1);
-          s += `<circle cx="${cx}" cy="${jy}" r="4" class="f-s${l.slot} ds-ring ds-dot"/><circle cx="${cx}" cy="${jy}" r="11" class="ds-hit"${tip(d.tip)}/>`;
+          s += `<circle cx="${cx}" cy="${jy}" r="4.75" class="f-s${l.slot} ds-ring ds-dot"/><circle cx="${cx}" cy="${jy}" r="11" class="ds-hit"${tip(d.tip)}/>`;
         });
         const mx = x(st.median).toFixed(1);
         s += `<line x1="${mx}" x2="${mx}" y1="${cy - 11}" y2="${cy + 11}" class="ds-median-halo"/><line x1="${mx}" x2="${mx}" y1="${cy - 10}" y2="${cy + 10}" class="ds-median"/>`;
@@ -605,7 +607,7 @@ footer a { color: var(--ink-2); }
         const cy = y + laneH / 2;
         if (g.points.length > 1) s += `<text x="${left - 10}" y="${cy + 4}" class="ds-muted" text-anchor="end">${esc(p.name)}</text>`;
         if (p.ci) s += `<line x1="${x(p.ci[0]).toFixed(1)}" x2="${x(p.ci[1]).toFixed(1)}" y1="${cy}" y2="${cy}" class="st-s${p.slot} ds-whisker"/>`;
-        s += `<circle cx="${x(p.v).toFixed(1)}" cy="${cy}" r="5" class="f-s${p.slot} ds-ring"/>`;
+        s += `<circle cx="${x(p.v).toFixed(1)}" cy="${cy}" r="5.5" class="f-s${p.slot} ds-ring"/>`;
         s += `<rect x="${left}" y="${y + 2}" width="${W - right - left}" height="${laneH - 4}" class="ds-hit ds-lanehit"${tip(p.tip)}/>`;
         s += `<text x="${W - right + 12}" y="${cy + 4}" class="ds-value">${esc(fmt(p.v))}</text>`;
         y += laneH;

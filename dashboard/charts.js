@@ -211,7 +211,7 @@
         if (st.ci) s += `<rect x="${x(st.ci[0]).toFixed(1)}" y="${cy - 7}" width="${Math.max(3, x(st.ci[1]) - x(st.ci[0])).toFixed(1)}" height="14" rx="7" class="ci-s${l.slot}"/>`;
         l.values.forEach((d, i) => {
           const cx = x(d.v).toFixed(1), jy = (cy + jitter(g.label + l.name, i, 6)).toFixed(1);
-          s += `<circle cx="${cx}" cy="${jy}" r="4" class="f-s${l.slot} ds-ring ds-dot"/><circle cx="${cx}" cy="${jy}" r="11" class="ds-hit"${tip(d.tip)}/>`;
+          s += `<circle cx="${cx}" cy="${jy}" r="4.75" class="f-s${l.slot} ds-ring ds-dot"/><circle cx="${cx}" cy="${jy}" r="11" class="ds-hit"${tip(d.tip)}/>`;
         });
         const mx = x(st.median).toFixed(1);
         s += `<line x1="${mx}" x2="${mx}" y1="${cy - 11}" y2="${cy + 11}" class="ds-median-halo"/><line x1="${mx}" x2="${mx}" y1="${cy - 10}" y2="${cy + 10}" class="ds-median"/>`;
@@ -303,7 +303,7 @@
         const cy = y + laneH / 2;
         if (g.points.length > 1) s += `<text x="${left - 10}" y="${cy + 4}" class="ds-muted" text-anchor="end">${esc(p.name)}</text>`;
         if (p.ci) s += `<line x1="${x(p.ci[0]).toFixed(1)}" x2="${x(p.ci[1]).toFixed(1)}" y1="${cy}" y2="${cy}" class="st-s${p.slot} ds-whisker"/>`;
-        s += `<circle cx="${x(p.v).toFixed(1)}" cy="${cy}" r="5" class="f-s${p.slot} ds-ring"/>`;
+        s += `<circle cx="${x(p.v).toFixed(1)}" cy="${cy}" r="5.5" class="f-s${p.slot} ds-ring"/>`;
         s += `<rect x="${left}" y="${y + 2}" width="${W - right - left}" height="${laneH - 4}" class="ds-hit ds-lanehit"${tip(p.tip)}/>`;
         s += `<text x="${W - right + 12}" y="${cy + 4}" class="ds-value">${esc(fmt(p.v))}</text>`;
         y += laneH;
