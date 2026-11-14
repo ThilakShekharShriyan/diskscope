@@ -2,7 +2,7 @@
 
 <root>/files/<opaque>/   logs.jsonl spans.jsonl metrics.csv README.md   (files arm)
 <root>/sql/<opaque>/     telemetry.db                                  (sql arm)
-<root>/digest/<opaque>/  digest.txt index.json                         (digest arm)
+<root>/digest/<opaque>/  digest.txt index.json drill/<id>.txt          (digest arm)
 <root>/grafana/<opaque>/ metrics.om loki.json                          (grafana arms)
 
 <opaque> = salted hash of the incident id, so no path an agent can see names
@@ -43,6 +43,10 @@ def prepare(incident, root, baselines=None, salt=DEFAULT_SALT):
         f.write(text)
     with open(os.path.join(root, "digest", oid, "index.json"), "w") as f:
         json.dump(index, f)
+    os.makedirs(os.path.join(root, "digest", oid, "drill"), exist_ok=True)
+    for k, v in index.items():  # one small file per evidence id: drill() is a plain cat
+        with open(os.path.join(root, "digest", oid, "drill", k + ".txt"), "w") as f:
+            f.write(v)
     shutil.rmtree(tmp, ignore_errors=True)  # local only; on Archil the exec owns it, so this works there too
     return {"id": incident["id"], "dir": oid, "calls": data["calls"],
             "digest_sha": hashlib.sha256(text.encode()).hexdigest()[:12]}

@@ -100,3 +100,18 @@ class HarnessTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EstimateTest(unittest.TestCase):
+    def test_estimate_uses_pilot_costs(self):
+        import contextlib
+        import io
+        from agentlab.__main__ import main
+        rep = {"observations": [{"detail": {"arm": "sql", "usd": u}} for u in (0.10, 0.20, 0.40)]}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(rep, f)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["estimate", "--pilot", f.name, "--incidents", "erofs-a,quiet-plain", "--trials", "3"])
+        os.unlink(f.name)
+        self.assertIn("6 runs: $1.20 (median) .. $2.40 (max)", buf.getvalue())

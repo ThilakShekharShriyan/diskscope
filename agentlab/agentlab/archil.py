@@ -2,12 +2,12 @@
 
 Never puts the URL or disk id in errors; scrubs disk ids from all output.
 """
+import http.client
 import json
 import os
 import re
 import time
-import urllib.error
-import urllib.request
+import urllib.parse
 
 ENDPOINTS = {
     "aws-us-east-1": "https://control.green.us-east-1.aws.prod.archil.com",
@@ -36,26 +36,48 @@ class Archil:
         if not _DISK_RX.fullmatch(disk):
             raise ArchilError("ARCHIL_DISK_ID must be dsk- plus 16 hex characters")
         self._key, self._disk, self._base = key, disk, ENDPOINTS[region]
+        self._host = urllib.parse.urlparse(self._base).netloc
+        self._conn = None  # one keep-alive HTTPS connection: no TCP+TLS handshake per tool call
         self.calls, self.max_calls = 0, max_calls
         self.disk_suffix = disk[-4:]
 
-    def exec(self, command, timeout=120):
-        """Run a shell command in a fresh microVM. Returns dict with stdout, stderr, exit_code, timing."""
+    def _post(self, path, body, timeout, retry):
+        headers = {"Authorization": "Bearer " + self._key, "Content-Type": "application/json",
+                   "Connection": "keep-alive"}
+        for attempt in (0, 1):  # retry once on a dropped idle connection
+            if self._conn is None:
+                self._conn = http.client.HTTPSConnection(self._host, timeout=timeout)
+            self._conn.timeout = timeout
+            try:
+                self._conn.request("POST", path, body=body, headers=headers)
+                r = self._conn.getresponse()
+                data = r.read()
+                return r.status, data
+            except (http.client.RemoteDisconnected, ConnectionResetError, BrokenPipeError,
+                    http.client.CannotSendRequest, http.client.ResponseNotReady):
+                self._conn.close()
+                self._conn = None
+                if attempt or not retry:
+                    raise ArchilError("Archil exec failed: connection dropped") from None
+            except (OSError, http.client.HTTPException) as e:
+                self._conn.close()
+                self._conn = None
+                raise ArchilError("Archil exec failed: %s" % type(e).__name__) from None
+
+    def exec(self, command, timeout=120, retry=False):
+        """Run a shell command in a fresh microVM. Returns dict with stdout, stderr, exit_code, timing.
+
+        retry=True resends once if a kept-alive connection was dropped; only for read-only commands,
+        since the first attempt may already have run."""
         if self.calls >= self.max_calls:
             raise ArchilError("call budget exhausted (%d)" % self.max_calls)
         self.calls += 1
         body = json.dumps({"command": command}).encode()
-        req = urllib.request.Request("%s/api/disks/%s/exec" % (self._base, self._disk), data=body, method="POST",
-                                     headers={"Authorization": "Bearer " + self._key,
-                                              "Content-Type": "application/json"})
         t0 = time.perf_counter()
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                payload = json.loads(r.read())
-        except urllib.error.HTTPError as e:
-            raise ArchilError("Archil exec failed: HTTP %d" % e.code) from None
-        except (urllib.error.URLError, TimeoutError) as e:
-            raise ArchilError("Archil exec failed: %s" % type(e).__name__) from None
+        status, raw = self._post("/api/disks/%s/exec" % self._disk, body, timeout, retry)
+        if status != 200:
+            raise ArchilError("Archil exec failed: HTTP %d" % status)
+        payload = json.loads(raw)
         wall = (time.perf_counter() - t0) * 1000
         d = payload.get("data") or {}
         t = d.get("timing") or {}

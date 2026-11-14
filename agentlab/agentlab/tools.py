@@ -7,9 +7,9 @@ same submit_answer tool. Arms 2-4 run on a backend:
   ArchilBackend - each tool call is one Archil exec (a fresh microVM) over the disk
 The grafana arms (0 visual, 1 mcp) need the docker stack and are not built yet.
 """
-import base64
 import json
 import os
+import re
 import shlex
 import sqlite3
 import subprocess
@@ -144,22 +144,9 @@ class LocalBackend:
         return cap(out), {"tool_ms": (time.perf_counter() - t0) * 1000}
 
 
-_SQL_GUEST = r"""
-import base64,sqlite3,sys
-db=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True)
-try:
-    c=db.execute(base64.b64decode(sys.argv[2]).decode())
-    rows=c.fetchmany(2000); cols=[d[0] for d in c.description or []]
-    print(','.join(cols))
-    for r in rows: print(','.join('' if v is None else str(v).replace('\n',' ') for v in r))
-except sqlite3.Error as e: print('sqlite error: %s'%e)
-"""
+_ID_RX = re.compile(r"^[MLE][0-9]{1,2}$")
+_SQL_MAX_BYTES = 4 * OUTPUT_CAP  # transfer limit; the cap is applied after
 
-_DRILL_GUEST = r"""
-import json,sys
-ix=json.load(open(sys.argv[1])); k=sys.argv[2].strip().upper()
-print(ix.get(k,'unknown id %r; valid ids: %s'%(sys.argv[2],', '.join(ix))))
-"""
 
 
 class ArchilBackend:
@@ -176,15 +163,19 @@ class ArchilBackend:
         if arm == "files" and tool == "shell":
             cmd = "cd %s && %s" % (shlex.quote(d("files")), args["command"])
         elif arm == "sql" and tool == "query":
-            cmd = "python3 -S -c %s %s %s" % (shlex.quote(_SQL_GUEST), shlex.quote(d("sql") + "/telemetry.db"),
-                                              shlex.quote(base64.b64encode(args["sql"].encode()).decode()))
+            # sqlite3 CLI: no interpreter start-up; -readonly; output trimmed before transfer
+            cmd = "sqlite3 -readonly -csv -header %s %s 2>&1 | head -c %d" % (
+                shlex.quote(d("sql") + "/telemetry.db"), shlex.quote(args["sql"]), _SQL_MAX_BYTES)
         elif arm == "digest" and tool == "get_digest":
             cmd = "cat %s" % shlex.quote(d("digest") + "/digest.txt")
         elif arm == "digest" and tool == "drill":
-            cmd = "python3 -S -c %s %s %s" % (shlex.quote(_DRILL_GUEST), shlex.quote(d("digest") + "/index.json"),
-                                              shlex.quote(args["id"]))
+            k = args["id"].strip().upper()
+            if not _ID_RX.match(k):
+                return "unknown id %r; ids look like M1, L2, E1" % args["id"], {"tool_ms": 0}
+            cmd = "cat %s 2>/dev/null || echo %s" % (shlex.quote("%s/drill/%s.txt" % (d("digest"), k)),
+                                                     shlex.quote("unknown id %r" % k))
         else:
             return "error: unknown tool %s for arm %s" % (tool, arm), {"tool_ms": 0}
-        r = self.client.exec(cmd)
+        r = self.client.exec(cmd, retry=True)  # every arm tool is read-only
         return cap(r["stdout"] + r["stderr"]), {"tool_ms": r["wall_ms"], "queue_ms": r["queue_ms"],
                                                 "execute_ms": r["execute_ms"], "exit_code": r["exit_code"]}
