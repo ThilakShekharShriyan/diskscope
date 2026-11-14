@@ -176,7 +176,7 @@ def _drill_metric(name, v, tss, k, spans, t0, mins=60):
                 vals = {str(s["attrs"].get(kk)) for s in sel}
                 if len(vals) > 12:
                     continue
-                for val in vals:
+                for val in sorted(vals):
                     pb = sum(str(s["attrs"].get(kk)) == val for s in before) / len(before)
                     pa = sum(str(s["attrs"].get(kk)) == val for s in after) / len(after)
                     if abs(pa - pb) >= 0.1:
