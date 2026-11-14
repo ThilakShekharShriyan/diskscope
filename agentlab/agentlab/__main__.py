@@ -2,6 +2,7 @@
 
   python3 -m agentlab prepare --root DIR [--incidents ids]
   python3 -m agentlab prepare-archil --prefix agentlab/<build> [--incidents ids]
+  python3 -m agentlab upload-archil --root ../data-ext/al-rcaeval --prefix agentlab/rc1 [--parallel 10]
   python3 -m agentlab run --backend local|archil --root DIR|--prefix P --arms files,sql,digest
                           [--incidents ids|main|held-out|rcaeval] [--trials N] [--model mock|claude-...|gpt-...]
                           [--live] [--effort medium] [--max-usd 5] [--parallel N] [--out FILE]
@@ -93,6 +94,21 @@ def cmd_prepare_archil(a):
             print(json.dumps(res))
         print(json.dumps({"batch": chunk[0] + "..", "n": len(chunk), "wall_ms": round(r["wall_ms"]),
                           "execute_ms": r["execute_ms"]}))
+
+
+def cmd_upload_archil(a):
+    """Put a local layout on the disk byte for byte (see upload.py); prints a JSON summary."""
+    from . import upload
+    arms = tuple(a.arms.split(","))
+    up = upload.Uploader(a.root, a.prefix, arms=arms, parallel=a.parallel)
+    summary, results = up.run(verify=not a.no_verify)
+    if a.out:
+        os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+        with open(a.out, "w") as f:
+            json.dump({"summary": summary, "cases": results, "timings": up.stats["timings"]}, f, indent=1)
+    print(json.dumps(summary, indent=1))
+    if summary["errors"] or summary["mismatched"]:
+        sys.exit(1)
 
 
 def cmd_run(a):
@@ -257,6 +273,14 @@ def main(argv=None):
     s.add_argument("--root", required=True, help="layout root; views go to <root>/rcatools/<opaque>/")
     s.add_argument("--incidents", default="rcaeval")
     s.set_defaults(fn=cmd_prepare_rcatools)
+    s = sub.add_parser("upload-archil", help="upload a local layout to the disk, sha256-verified, resumable")
+    s.add_argument("--root", required=True, help="local layout, e.g. ../data-ext/al-rcaeval")
+    s.add_argument("--prefix", required=True, help="disk-relative dir, e.g. agentlab/rc1")
+    s.add_argument("--arms", default="files,sql,digest,grafana")
+    s.add_argument("--parallel", type=int, default=8, help="concurrent execs")
+    s.add_argument("--no-verify", action="store_true", help="skip the final re-hash of every file")
+    s.add_argument("--out", help="write the summary and per-exec timings here (JSON)")
+    s.set_defaults(fn=cmd_upload_archil)
     s = sub.add_parser("run")
     s.add_argument("--backend", choices=["local", "archil"], default="local")
     s.add_argument("--root", help="local layout root (local backend)")

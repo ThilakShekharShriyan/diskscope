@@ -16,6 +16,7 @@ ENDPOINTS = {
 }
 _DISK_RX = re.compile(r"dsk-[0-9a-f]{16}")
 MOUNT = "/mnt/archil"
+MAX_COMMAND_BYTES = 102400  # server-side limit on the command field (HTTP 400 above it; measured 2026-11-14)
 
 
 def scrub(s):
@@ -63,6 +64,35 @@ class Archil:
                 self._conn.close()
                 self._conn = None
                 raise ArchilError("Archil exec failed: %s" % type(e).__name__) from None
+
+    def exec_conditional(self, command, timeout=300, name="d"):
+        """Run a command via the multi-disk endpoint with a conditional mount at /mnt/archil/<name>:
+        writes and deletes need no `archil checkout` (shared mode would give EROFS on other execs'
+        entries). Never retried: the first attempt may already have written."""
+        if self.calls >= self.max_calls:
+            raise ArchilError("call budget exhausted (%d)" % self.max_calls)
+        if len(command.encode()) > MAX_COMMAND_BYTES:
+            raise ArchilError("command is %d bytes; Archil accepts at most %d" % (len(command.encode()), MAX_COMMAND_BYTES))
+        self.calls += 1
+        body = json.dumps({"disks": {name: {"disk": self._disk, "conditional": True}}, "command": command}).encode()
+        return self._result(body, "/api/exec", timeout, False)
+
+    def _result(self, body, path, timeout, retry):
+        t0 = time.perf_counter()
+        status, raw = self._post(path, body, timeout, retry)
+        if status != 200:
+            try:
+                why = (json.loads(raw).get("error") or "")[:200]
+            except (ValueError, AttributeError):
+                why = ""
+            raise ArchilError(scrub("Archil exec failed: HTTP %d %s" % (status, why)).strip())
+        payload = json.loads(raw)
+        wall = (time.perf_counter() - t0) * 1000
+        d = payload.get("data") or {}
+        t = d.get("timing") or {}
+        return {"stdout": scrub(d.get("stdout")), "stderr": scrub(d.get("stderr")),
+                "exit_code": d.get("exitCode"), "wall_ms": wall, "queue_ms": t.get("queueMs"),
+                "execute_ms": t.get("executeMs"), "total_ms": t.get("totalMs")}
 
     def exec(self, command, timeout=120, retry=False):
         """Run a shell command in a fresh microVM. Returns dict with stdout, stderr, exit_code, timing.
