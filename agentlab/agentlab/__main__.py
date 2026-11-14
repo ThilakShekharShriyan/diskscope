@@ -6,6 +6,9 @@
                           [--incidents ids|main|held-out|rcaeval] [--trials N] [--model mock|claude-...|gpt-...]
                           [--live] [--effort medium] [--max-usd 5] [--parallel N] [--out FILE]
   python3 -m agentlab estimate --pilot RUN.json [--incidents ...] [--trials N]
+  python3 -m agentlab lessons build --runs RUN.json ... --out-dir lessons/ [--dry-run] [--max-usd 2]
+  python3 -m agentlab lessons check --dir lessons/
+  (arms sql+lessons, digest+lessons, sql+placebo, digest+placebo read --lessons-dir; see lessons.py)
   python3 -m agentlab.report RUN.json ... [--html FILE]
 
 Each finished run is appended to OUT.partial.jsonl immediately, so an interrupted
@@ -94,12 +97,21 @@ def cmd_prepare_archil(a):
 
 def cmd_run(a):
     arms = a.arms.split(",")
+    from . import lessons
     for arm in arms:
-        if arm not in tools.ARMS:
+        if arm not in tools.ARMS and not lessons.is_lessons_arm(arm):
             sys.exit("arm %r not available (implemented: %s; planned: %s)" % (arm, tools.ARMS, tools.PLANNED_ARMS))
     live = a.model != "mock"
     if live and not a.live:
         sys.exit("refusing to call a live model without --live")
+    if any(lessons.is_lessons_arm(x) for x in arms):
+        os.environ["AGENTLAB_LESSONS_DIR"] = a.lessons_dir
+        probs = lessons.check(a.lessons_dir)
+        if probs:
+            sys.exit("lessons check failed:\n" + "\n".join(probs))
+        if live and _uncommitted(a.lessons_dir):
+            sys.exit("commit %s before a live lessons run (files must be frozen by hash before scoring)"
+                     % a.lessons_dir)
     if live and a.backend == "local" and "files" in arms:
         sys.exit("the files arm needs --backend archil for live models (local shell is disabled)")
     jobs = [(i, arm, t) for i in _ids(a.incidents) for arm in arms for t in range(a.trials)]
@@ -167,6 +179,31 @@ def cmd_run(a):
     print("wrote %s (%d runs, traces in %s)" % (a.out, len(obs), trace_dir))
 
 
+def _uncommitted(path):
+    """True unless the manifest is tracked by git and nothing under path has changes (or git cannot tell)."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "status", "--porcelain", "--", "."], cwd=path, capture_output=True, text=True)
+        t = subprocess.run(["git", "ls-files", "--", "manifest.json"], cwd=path, capture_output=True, text=True)
+    except OSError:
+        return True
+    return r.returncode != 0 or bool(r.stdout.strip()) or not t.stdout.strip()
+
+
+def cmd_lessons(a):
+    from . import lessons
+    if a.action == "check":
+        probs = lessons.check(a.dir)
+        print("\n".join(probs) or "ok: hashes match the manifest, no service names or case ids")
+        sys.exit(1 if probs else 0)
+    if not a.runs or not a.out_dir:
+        sys.exit("lessons build needs --runs and --out-dir")
+    if not a.dry_run and not os.environ.get("ANTHROPIC_API_KEY"):
+        sys.exit("lessons build calls %s; set ANTHROPIC_API_KEY or use --dry-run" % a.model)
+    lessons.build(a.runs, a.out_dir, model=a.model, max_usd=a.max_usd, variant=a.variant, dry_run=a.dry_run,
+                  max_chars=a.max_prompt_chars)
+
+
 def cmd_estimate(a):
     """Project the cost of a full matrix from a pilot's measured per-run tokens (per arm)."""
     d = json.load(open(a.pilot))
@@ -217,7 +254,20 @@ def main(argv=None):
     s.add_argument("--parallel", type=int, default=1,
                    help="concurrent runs; keep 1 when comparing Archil latency (fan-out >= 4 slows calls)")
     s.add_argument("--out", default="results/agentlab.json")
+    s.add_argument("--lessons-dir", default=os.path.join(HERE, "..", "lessons"),
+                   help="manifest + lessons files for the +lessons/+placebo arms")
     s.set_defaults(fn=cmd_run)
+    s = sub.add_parser("lessons")
+    s.add_argument("action", choices=["build", "check"])
+    s.add_argument("--runs", nargs="+", help="graded RunReport .json or .partial.jsonl files")
+    s.add_argument("--out-dir")
+    s.add_argument("--dir", default=os.path.join(HERE, "..", "lessons"), help="for check")
+    s.add_argument("--model", default="claude-opus-5-5")
+    s.add_argument("--max-usd", type=float, default=2.0)
+    s.add_argument("--variant", default="rcaeval", choices=["rcaeval", "rcaeval+t"])
+    s.add_argument("--max-prompt-chars", type=int, default=60000)
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(fn=cmd_lessons)
     s = sub.add_parser("estimate")
     s.add_argument("--pilot", required=True, help="RunReport from a live pilot")
     s.add_argument("--incidents")

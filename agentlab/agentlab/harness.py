@@ -66,7 +66,7 @@ class MockModel:
               "digest": [("get_digest", {}), ("drill", {"id": "M1"})]}
 
     def __init__(self, arm, answer=None):
-        self.steps = list(self.SCRIPT[arm])
+        self.steps = list(self.SCRIPT[arm.split("+", 1)[0]])  # "sql+lessons" scripts as "sql"
         self.answer = answer or {"component": "none", "cause": "no_fault", "evidence": [], "summary": "mock"}
 
     def turn(self, messages, tools, system):
@@ -217,8 +217,14 @@ def arm_tools(arm, tool_text):
 
 def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None, meter=None):
     spec = task_spec(incident_id)
-    tools = arm_tools(arm, spec["tool_text"]) + [spec["submit"]]
+    base = arm.split("+", 1)[0]  # "<base>+lessons" / "<base>+placebo": the base arm's tools and backend
+    tools = arm_tools(base, spec["tool_text"]) + [spec["submit"]]
     system = spec["system"].replace("{turns}", str(MAX_TURNS))
+    extra = {}
+    if base != arm:
+        from . import lessons
+        suffix, extra = lessons.section(arm, incident_id)
+        system += suffix
     if arm == "prior":  # no-telemetry control: what the model answers from the prompt alone (memorisation check)
         system += ("\n\nIn this run you have no telemetry tools. Call submit_answer right away with your "
                    "best guess from the information above.")
@@ -282,7 +288,7 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None, meter=Non
                 continue
             t1 = time.time()
             try:
-                out, meta = backend.call(spec.get("layout_id", incident_id), arm, b.name, dict(b.input))
+                out, meta = backend.call(spec.get("layout_id", incident_id), base, b.name, dict(b.input))
             except InfraError as e:
                 error, infra = "infra: %s" % e, True
                 break
@@ -291,7 +297,7 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None, meter=Non
             tool_ms += meta.get("tool_ms", 0)
             outputs.append(out)
             calls.append({"turn": turn, "t_ms": round((t1 - t_start) * 1000), "tool": b.name, "input": dict(b.input),
-                          "chars": len(out), "output": out, "wandered": _wandered(arm, dict(b.input)), **meta})
+                          "chars": len(out), "output": out, "wandered": _wandered(base, dict(b.input)), **meta})
             spans.append(_span(trace_id, root, "execute_tool %s" % b.name, t1, meta.get("tool_ms", 0),
                                {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": b.name,
                                 "agentlab.result_chars": len(out), "agentlab.backend": backend.name}))
@@ -324,7 +330,7 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None, meter=Non
                    "served_by": sorted({t["served_by"] for t in turns_log}),
                    "model_mismatch": any(not str(t["served_by"]).startswith(model.name) for t in turns_log),
                    "stop_reason": stop, "assistant_text": texts,
-                   "wandered": any(c["wandered"] for c in calls)},
+                   "wandered": any(c["wandered"] for c in calls), **extra},
     }
 
 
