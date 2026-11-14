@@ -48,3 +48,9 @@ The pilot cost $2.33 in total.
 - claude-opus-5-5: $13.4 at the median, up to $31.6.
 - gpt-5.6-sol: $16.4 at the median, up to $35.9.
 - Both models: about $30 at the median, $68 at most. Adding the `+t` variant doubles that.
+
+**Leak check (all four agent-visible trees, 120 directories, 23 GB):**
+- Directory names are salted hashes. No path contains `re2tt` or a fault word.
+- No file contains `re2tt`, `RE2-TT`, `re2-tt`, `inject_time` or `root_cause`. The sqlite and grafana files were also scanned byte by byte.
+- `files/` and `digest/` contain no injection-tool fingerprints: `stress-ng`, `chaosblade`, `chaos-mesh`, `netem`, `tc qdisc` and `inject` were all absent.
+- No tool output in the pilot contains any of these words.
