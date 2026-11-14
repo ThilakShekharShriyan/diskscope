@@ -31,9 +31,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _ids(arg):
-    if arg == "rcaeval":
+    if arg in ("rcaeval", "rcaeval+t"):
         from . import rcaeval
-        return ["rcaeval:" + c["case"] for c in rcaeval.load_subset()]
+        return [arg + ":" + c["case"] for c in rcaeval.load_subset()]
     if arg in (None, "all"):
         return [i["id"] for i in incidents.INCIDENTS + incidents.HELD_OUT]
     if arg == "main":
@@ -41,7 +41,7 @@ def _ids(arg):
     if arg == "held-out":
         return [i["id"] for i in incidents.HELD_OUT]
     ids = arg.split(",")
-    bad = [i for i in ids if i not in incidents.ALL and not i.startswith("rcaeval:")]
+    bad = [i for i in ids if i not in incidents.ALL and not i.startswith(("rcaeval:", "rcaeval+t:"))]
     if bad:
         sys.exit("unknown incidents: %s" % bad)
     return ids

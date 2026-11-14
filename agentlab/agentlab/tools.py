@@ -19,7 +19,7 @@ from .incidents import CAUSES, COMPONENTS
 from .prepare import DEFAULT_SALT, opaque
 
 OUTPUT_CAP = 8000
-ARMS = ["files", "sql", "digest"]          # implemented
+ARMS = ["files", "sql", "digest", "prior"]  # implemented; prior = no telemetry tools (control)
 PLANNED_ARMS = ["visual", "mcp"]           # need docker (Prometheus, Loki, Grafana)
 
 SUBMIT = {
@@ -41,6 +41,7 @@ SUBMIT = {
 }
 
 ARM_TOOLS = {
+    "prior": [],
     "files": [{
         "name": "shell",
         "description": ("Run a shell command in the telemetry directory and get stdout+stderr "

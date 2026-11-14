@@ -49,7 +49,8 @@ def load(paths):
             calls = d.get("calls", [])
             outs = [c.get("output", "") for c in calls]
             runs.append({
-                "case": o["task"], "trial": o["trial"], "arm": d["arm"], "model": d["model"],
+                "case": o["task"].split(":", 1)[-1], "trial": o["trial"], "model": d["model"],
+                "arm": d["arm"] + ("+time" if d.get("variant") == "rcaeval+t" else ""),
                 "ac1": g.get("ac1", 1.0 if g.get("component_ok") else 0.0),
                 "ac3": g.get("ac3", 1.0 if g.get("component_ok") else 0.0),
                 "ac5": g.get("ac5", 1.0 if g.get("component_ok") else 0.0),
@@ -214,7 +215,21 @@ def summarize(runs):
                 if ra and rb:
                     comps.append({"arm": a, "a": m1, "b": m2, "correct": paired(ra, rb, "correct"),
                                   "usd": paired(ra, rb, "usd"), "mcnemar_correct": mcnemar(ra, rb, "correct")})
+    holm(comps)
     return out, comps
+
+
+def holm(comps):
+    """Holm-adjusted McNemar p-values, within each family (one model's arm pairs, or one arm's model pair)."""
+    fams = {}
+    for c in comps:
+        fams.setdefault(c.get("model") or ("arm:" + c["arm"]), []).append(c)
+    for fam in fams.values():
+        order = sorted(fam, key=lambda c: c["mcnemar_correct"]["p"])
+        m, run = len(order), 0.0
+        for i, c in enumerate(order):
+            run = max(run, min(1.0, (m - i) * c["mcnemar_correct"]["p"]))
+            c["mcnemar_correct"]["p_holm"] = run
 
 
 # ---------------- rendering ----------------
@@ -250,7 +265,7 @@ def markdown(summary, comps, baselines):
                 fmt = (lambda x: "%+.3f" % x) if k == "usd" else (lambda x: "%+.0fpt" % (100 * x))
                 parts.append("%s %s (%s, %s)" % (k, fmt(v["diff"]), fmt(v["ci"][0]), fmt(v["ci"][1])))
         mc = c["mcnemar_correct"]
-        parts.append("McNemar p=%.2f (%d vs %d)" % (mc["p"], mc["only_a"], mc["only_b"]))
+        parts.append("McNemar p=%.2f, Holm %.2f (%d vs %d cases)" % (mc["p"], mc.get("p_holm", mc["p"]), mc["only_a"], mc["only_b"]))
         L.append("- " + who + ": " + "; ".join(parts))
     return "\n".join(L)
 
@@ -403,10 +418,12 @@ def main(argv=None):
     baselines = None
     if a.baselines:
         bs = json.load(open(a.baselines))["summary"]
-        baselines = {"digest read as ranking (no LLM)": bs["digest_rank"]}
-        if "baro" in bs:
-            baselines["BARO (RCAEval)"] = bs["baro"]
-        baselines["chance (1/12)"] = {"1": 1 / 12, "avg5": float("nan")}
+        baselines = {"digest as ranking, no LLM, no time": bs["digest_rank"]}
+        for k, label in (("nsigma", "N-Sigma (given time)"), ("baro", "BARO (given time)")):
+            if k in bs:
+                baselines[label] = bs[k]
+        if "chance_candidates" in bs:
+            baselines["chance (%d candidates)" % bs["chance_candidates"]["n_candidates"]] = bs["chance_candidates"]
     md = markdown(summary, comps, baselines)
     if EXCLUDED:
         md += "\n\nExcluded (infra failure or served by another model): %d runs: %s" % (

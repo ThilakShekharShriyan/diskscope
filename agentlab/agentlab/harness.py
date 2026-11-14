@@ -60,6 +60,7 @@ class MockModel:
     name = "mock"
     SCRIPT = {"files": [("shell", {"command": "head -c 400 README.md; grep -c ERROR logs.jsonl"}),
                         ("shell", {"command": "grep ERROR logs.jsonl | head -5"})],
+              "prior": [],
               "sql": [("query", {"sql": "SELECT component, level, count(*) n FROM logs GROUP BY 1,2 ORDER BY n DESC LIMIT 10"}),
                       ("query", {"sql": "SELECT msg FROM logs WHERE level='ERROR' LIMIT 5"})],
               "digest": [("get_digest", {}), ("drill", {"id": "M1"})]}
@@ -193,7 +194,7 @@ def grade(incident, answer, tool_outputs):
 
 def task_spec(incident_id):
     """Everything suite-specific about one task: truth, prompt, submit tool, grader."""
-    if incident_id.startswith("rcaeval:"):
+    if incident_id.startswith(("rcaeval:", "rcaeval+t:")):
         from . import rcaeval
         return rcaeval.task(incident_id)
     inc = ALL[incident_id]
@@ -218,6 +219,9 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None, meter=Non
     spec = task_spec(incident_id)
     tools = arm_tools(arm, spec["tool_text"]) + [spec["submit"]]
     system = spec["system"].replace("{turns}", str(MAX_TURNS))
+    if arm == "prior":  # no-telemetry control: what the model answers from the prompt alone (memorisation check)
+        system += ("\n\nIn this run you have no telemetry tools. Call submit_answer right away with your "
+                   "best guess from the information above.")
     messages = [{"role": "user", "content": spec["user"]}]
     trace_id, root = secrets.token_hex(16), secrets.token_hex(8)
     spans, outputs, calls, texts, turns_log = [], [], [], [], []
@@ -314,7 +318,7 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None, meter=Non
         "operations": len(calls), "bytes": sum(c["chars"] for c in calls), "error": error, "cleanup_error": None,
         "started_ms": t_start * 1000, "parallel": False,
         "detail": {"arm": arm, "model": model.name, "backend": backend.name, "answer": answer, "grade": g,
-                   "truth": spec["truth"], "held_out": spec["held_out"], "turns": len(turns_log),
+                   "truth": spec["truth"], "held_out": spec["held_out"], "variant": spec.get("variant", ""), "turns": len(turns_log),
                    "tokens": totals, "usd": usd, "model_ms": model_ms, "tool_ms": tool_ms, "calls": calls,
                    "turns_log": turns_log, "infra_error": infra,
                    "served_by": sorted({t["served_by"] for t in turns_log}),

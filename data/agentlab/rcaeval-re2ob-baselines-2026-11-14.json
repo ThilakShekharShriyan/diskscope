@@ -13,30 +13,73 @@
    "5": 0.9333333333333333,
    "avg5": 0.7466666666666668
   },
+  "nsigma": {
+   "1": 0.7666666666666667,
+   "3": 0.9333333333333333,
+   "5": 0.9666666666666667,
+   "avg5": 0.8933333333333333
+  },
+  "baro+120s": {
+   "1": 0.26666666666666666,
+   "3": 0.8333333333333334,
+   "5": 0.9333333333333333,
+   "avg5": 0.7533333333333336
+  },
+  "nsigma+120s": {
+   "1": 0.1,
+   "3": 0.2,
+   "5": 0.3333333333333333,
+   "avg5": 0.22666666666666668
+  },
+  "chance_candidates": {
+   "n_candidates": 5,
+   "1": 0.2,
+   "3": 0.6,
+   "5": 1,
+   "avg5": 0.6
+  },
   "avg5_by_fault": {
    "cpu": {
     "digest_rank": 1.0,
-    "baro": 0.64
+    "baro_rank": 0.64,
+    "nsigma_rank": 0.8400000000000001,
+    "baro+120s_rank": 0.64,
+    "nsigma+120s_rank": 0.0
    },
    "mem": {
     "digest_rank": 1.0,
-    "baro": 0.8800000000000001
+    "baro_rank": 0.8800000000000001,
+    "nsigma_rank": 0.96,
+    "baro+120s_rank": 0.8400000000000001,
+    "nsigma+120s_rank": 0.24000000000000005
    },
    "disk": {
     "digest_rank": 0.96,
-    "baro": 0.8
+    "baro_rank": 0.8,
+    "nsigma_rank": 1.0,
+    "baro+120s_rank": 1.0,
+    "nsigma+120s_rank": 0.0
    },
    "delay": {
     "digest_rank": 0.36,
-    "baro": 0.72
+    "baro_rank": 0.72,
+    "nsigma_rank": 0.9199999999999999,
+    "baro+120s_rank": 0.64,
+    "nsigma+120s_rank": 0.27999999999999997
    },
    "loss": {
     "digest_rank": 0.8400000000000001,
-    "baro": 0.8
+    "baro_rank": 0.8,
+    "nsigma_rank": 0.8400000000000001,
+    "baro+120s_rank": 0.76,
+    "nsigma+120s_rank": 0.6799999999999999
    },
    "socket": {
     "digest_rank": 0.96,
-    "baro": 0.64
+    "baro_rank": 0.64,
+    "nsigma_rank": 0.8,
+    "baro+120s_rank": 0.64,
+    "nsigma+120s_rank": 0.16
    }
   }
  },
@@ -79,7 +122,49 @@
     "frontend-external",
     "productcatalogservice"
    ],
-   "secs": 5.8
+   "nsigma_rank": [
+    "checkoutservice",
+    "emailservice",
+    "cartservice",
+    "redis",
+    "recommendationservice",
+    "shippingservice",
+    "currencyservice",
+    "paymentservice",
+    "frontend",
+    "adservice",
+    "frontend-external",
+    "productcatalogservice"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "checkoutservice",
+    "emailservice",
+    "currencyservice",
+    "cartservice",
+    "shippingservice",
+    "adservice",
+    "frontend",
+    "recommendationservice",
+    "paymentservice",
+    "frontend-external",
+    "productcatalogservice"
+   ],
+   "nsigma+120s_rank": [
+    "emailservice",
+    "currencyservice",
+    "cartservice",
+    "shippingservice",
+    "redis",
+    "checkoutservice",
+    "frontend",
+    "adservice",
+    "paymentservice",
+    "recommendationservice",
+    "frontend-external",
+    "productcatalogservice"
+   ],
+   "secs": 5.9
   },
   {
    "case": "re2ob_checkoutservice_delay_1",
@@ -120,7 +205,49 @@
     "adservice",
     "frontend-external"
    ],
-   "secs": 4.8
+   "nsigma_rank": [
+    "emailservice",
+    "shippingservice",
+    "checkoutservice",
+    "paymentservice",
+    "cartservice",
+    "recommendationservice",
+    "frontend",
+    "productcatalogservice",
+    "adservice",
+    "redis",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "emailservice",
+    "shippingservice",
+    "checkoutservice",
+    "paymentservice",
+    "cartservice",
+    "recommendationservice",
+    "adservice",
+    "frontend",
+    "productcatalogservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "cartservice",
+    "emailservice",
+    "shippingservice",
+    "adservice",
+    "frontend",
+    "recommendationservice",
+    "checkoutservice",
+    "redis",
+    "productcatalogservice",
+    "paymentservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "secs": 4.9
   },
   {
    "case": "re2ob_checkoutservice_disk_3",
@@ -158,6 +285,45 @@
     "currencyservice",
     "productcatalogservice",
     "paymentservice",
+    "frontend"
+   ],
+   "nsigma_rank": [
+    "checkoutservice",
+    "emailservice",
+    "cartservice",
+    "adservice",
+    "recommendationservice",
+    "shippingservice",
+    "currencyservice",
+    "productcatalogservice",
+    "redis",
+    "frontend",
+    "paymentservice"
+   ],
+   "baro+120s_rank": [
+    "checkoutservice",
+    "redis",
+    "cartservice",
+    "emailservice",
+    "paymentservice",
+    "recommendationservice",
+    "adservice",
+    "currencyservice",
+    "shippingservice",
+    "productcatalogservice",
+    "frontend"
+   ],
+   "nsigma+120s_rank": [
+    "cartservice",
+    "emailservice",
+    "recommendationservice",
+    "adservice",
+    "currencyservice",
+    "shippingservice",
+    "paymentservice",
+    "productcatalogservice",
+    "redis",
+    "checkoutservice",
     "frontend"
    ],
    "secs": 4.9
@@ -203,6 +369,48 @@
     "cartservice",
     "frontend-external"
    ],
+   "nsigma_rank": [
+    "paymentservice",
+    "checkoutservice",
+    "emailservice",
+    "adservice",
+    "redis",
+    "frontend",
+    "productcatalogservice",
+    "recommendationservice",
+    "shippingservice",
+    "currencyservice",
+    "cartservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "paymentservice",
+    "checkoutservice",
+    "emailservice",
+    "adservice",
+    "shippingservice",
+    "productcatalogservice",
+    "cartservice",
+    "frontend",
+    "recommendationservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "checkoutservice",
+    "emailservice",
+    "paymentservice",
+    "adservice",
+    "redis",
+    "frontend",
+    "recommendationservice",
+    "productcatalogservice",
+    "shippingservice",
+    "currencyservice",
+    "cartservice",
+    "frontend-external"
+   ],
    "secs": 4.8
   },
   {
@@ -242,6 +450,48 @@
     "productcatalogservice",
     "frontend",
     "frontend-external"
+   ],
+   "nsigma_rank": [
+    "checkoutservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "shippingservice",
+    "adservice",
+    "paymentservice",
+    "cartservice",
+    "currencyservice",
+    "productcatalogservice",
+    "redis",
+    "recommendationservice"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "checkoutservice",
+    "emailservice",
+    "paymentservice",
+    "shippingservice",
+    "adservice",
+    "cartservice",
+    "frontend",
+    "recommendationservice",
+    "productcatalogservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "frontend",
+    "checkoutservice",
+    "emailservice",
+    "adservice",
+    "cartservice",
+    "shippingservice",
+    "currencyservice",
+    "paymentservice",
+    "redis",
+    "frontend-external",
+    "productcatalogservice",
+    "recommendationservice"
    ],
    "secs": 3.7
   },
@@ -283,7 +533,49 @@
     "frontend-external",
     "frontend"
    ],
-   "secs": 4.8
+   "nsigma_rank": [
+    "checkoutservice",
+    "emailservice",
+    "paymentservice",
+    "shippingservice",
+    "redis",
+    "adservice",
+    "productcatalogservice",
+    "frontend",
+    "recommendationservice",
+    "cartservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "checkoutservice",
+    "emailservice",
+    "recommendationservice",
+    "shippingservice",
+    "productcatalogservice",
+    "paymentservice",
+    "cartservice",
+    "adservice",
+    "currencyservice",
+    "frontend",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "emailservice",
+    "checkoutservice",
+    "paymentservice",
+    "adservice",
+    "shippingservice",
+    "productcatalogservice",
+    "redis",
+    "recommendationservice",
+    "frontend",
+    "cartservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "secs": 4.9
   },
   {
    "case": "re2ob_currencyservice_cpu_1",
@@ -324,7 +616,49 @@
     "emailservice",
     "frontend-external"
    ],
-   "secs": 4.8
+   "nsigma_rank": [
+    "checkoutservice",
+    "recommendationservice",
+    "cartservice",
+    "frontend",
+    "currencyservice",
+    "shippingservice",
+    "emailservice",
+    "productcatalogservice",
+    "redis",
+    "paymentservice",
+    "adservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "checkoutservice",
+    "cartservice",
+    "frontend",
+    "recommendationservice",
+    "currencyservice",
+    "shippingservice",
+    "paymentservice",
+    "productcatalogservice",
+    "emailservice",
+    "adservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "emailservice",
+    "checkoutservice",
+    "frontend",
+    "shippingservice",
+    "cartservice",
+    "recommendationservice",
+    "redis",
+    "paymentservice",
+    "currencyservice",
+    "productcatalogservice",
+    "adservice",
+    "frontend-external"
+   ],
+   "secs": 4.9
   },
   {
    "case": "re2ob_currencyservice_delay_2",
@@ -360,6 +694,48 @@
     "recommendationservice",
     "adservice",
     "shippingservice",
+    "cartservice",
+    "productcatalogservice",
+    "frontend-external"
+   ],
+   "nsigma_rank": [
+    "currencyservice",
+    "frontend",
+    "checkoutservice",
+    "emailservice",
+    "paymentservice",
+    "adservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice",
+    "cartservice",
+    "frontend-external",
+    "productcatalogservice"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "frontend",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "paymentservice",
+    "shippingservice",
+    "recommendationservice",
+    "adservice",
+    "cartservice",
+    "productcatalogservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "emailservice",
+    "frontend",
+    "adservice",
+    "currencyservice",
+    "recommendationservice",
+    "shippingservice",
+    "redis",
+    "checkoutservice",
+    "paymentservice",
     "cartservice",
     "productcatalogservice",
     "frontend-external"
@@ -406,7 +782,49 @@
     "emailservice",
     "frontend-external"
    ],
-   "secs": 4.3
+   "nsigma_rank": [
+    "currencyservice",
+    "recommendationservice",
+    "paymentservice",
+    "frontend",
+    "checkoutservice",
+    "emailservice",
+    "adservice",
+    "shippingservice",
+    "redis",
+    "productcatalogservice",
+    "cartservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "currencyservice",
+    "redis",
+    "paymentservice",
+    "recommendationservice",
+    "frontend",
+    "checkoutservice",
+    "shippingservice",
+    "adservice",
+    "productcatalogservice",
+    "cartservice",
+    "emailservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "paymentservice",
+    "frontend",
+    "emailservice",
+    "adservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice",
+    "checkoutservice",
+    "productcatalogservice",
+    "currencyservice",
+    "cartservice",
+    "frontend-external"
+   ],
+   "secs": 4.4
   },
   {
    "case": "re2ob_currencyservice_loss_2",
@@ -446,6 +864,48 @@
     "productcatalogservice",
     "emailservice",
     "shippingservice",
+    "frontend-external"
+   ],
+   "nsigma_rank": [
+    "frontend",
+    "recommendationservice",
+    "currencyservice",
+    "checkoutservice",
+    "cartservice",
+    "paymentservice",
+    "adservice",
+    "productcatalogservice",
+    "shippingservice",
+    "emailservice",
+    "redis",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "frontend",
+    "recommendationservice",
+    "currencyservice",
+    "checkoutservice",
+    "cartservice",
+    "paymentservice",
+    "productcatalogservice",
+    "adservice",
+    "shippingservice",
+    "emailservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "paymentservice",
+    "frontend",
+    "currencyservice",
+    "shippingservice",
+    "emailservice",
+    "recommendationservice",
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "productcatalogservice",
+    "redis",
     "frontend-external"
    ],
    "secs": 4.1
@@ -490,6 +950,48 @@
     "paymentservice",
     "frontend-external"
    ],
+   "nsigma_rank": [
+    "recommendationservice",
+    "currencyservice",
+    "frontend",
+    "emailservice",
+    "checkoutservice",
+    "cartservice",
+    "adservice",
+    "productcatalogservice",
+    "shippingservice",
+    "redis",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "currencyservice",
+    "recommendationservice",
+    "frontend",
+    "checkoutservice",
+    "shippingservice",
+    "cartservice",
+    "adservice",
+    "productcatalogservice",
+    "emailservice",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "cartservice",
+    "recommendationservice",
+    "shippingservice",
+    "emailservice",
+    "frontend",
+    "productcatalogservice",
+    "checkoutservice",
+    "adservice",
+    "currencyservice",
+    "paymentservice",
+    "redis",
+    "frontend-external"
+   ],
    "secs": 4.5
   },
   {
@@ -531,7 +1033,49 @@
     "paymentservice",
     "frontend-external"
    ],
-   "secs": 4.7
+   "nsigma_rank": [
+    "cartservice",
+    "recommendationservice",
+    "checkoutservice",
+    "frontend",
+    "emailservice",
+    "currencyservice",
+    "redis",
+    "productcatalogservice",
+    "adservice",
+    "shippingservice",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "frontend",
+    "checkoutservice",
+    "emailservice",
+    "cartservice",
+    "currencyservice",
+    "recommendationservice",
+    "adservice",
+    "productcatalogservice",
+    "shippingservice",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "emailservice",
+    "redis",
+    "adservice",
+    "cartservice",
+    "productcatalogservice",
+    "shippingservice",
+    "recommendationservice",
+    "checkoutservice",
+    "frontend",
+    "paymentservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "secs": 4.8
   },
   {
    "case": "re2ob_emailservice_cpu_3",
@@ -572,7 +1116,49 @@
     "shippingservice",
     "frontend-external"
    ],
-   "secs": 4.9
+   "nsigma_rank": [
+    "emailservice",
+    "adservice",
+    "checkoutservice",
+    "frontend",
+    "cartservice",
+    "productcatalogservice",
+    "redis",
+    "paymentservice",
+    "shippingservice",
+    "recommendationservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "emailservice",
+    "adservice",
+    "checkoutservice",
+    "cartservice",
+    "productcatalogservice",
+    "currencyservice",
+    "paymentservice",
+    "recommendationservice",
+    "shippingservice",
+    "frontend",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "adservice",
+    "checkoutservice",
+    "productcatalogservice",
+    "cartservice",
+    "shippingservice",
+    "currencyservice",
+    "redis",
+    "paymentservice",
+    "recommendationservice",
+    "emailservice",
+    "frontend",
+    "frontend-external"
+   ],
+   "secs": 5.0
   },
   {
    "case": "re2ob_emailservice_delay_1",
@@ -611,6 +1197,48 @@
     "adservice",
     "recommendationservice",
     "frontend-external"
+   ],
+   "nsigma_rank": [
+    "emailservice",
+    "checkoutservice",
+    "adservice",
+    "paymentservice",
+    "redis",
+    "shippingservice",
+    "cartservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "frontend",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "emailservice",
+    "checkoutservice",
+    "cartservice",
+    "paymentservice",
+    "productcatalogservice",
+    "shippingservice",
+    "adservice",
+    "recommendationservice",
+    "frontend",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "emailservice",
+    "cartservice",
+    "adservice",
+    "paymentservice",
+    "redis",
+    "checkoutservice",
+    "shippingservice",
+    "recommendationservice",
+    "productcatalogservice",
+    "frontend",
+    "frontend-external",
+    "currencyservice"
    ],
    "secs": 4.9
   },
@@ -653,6 +1281,48 @@
     "frontend-external",
     "frontend"
    ],
+   "nsigma_rank": [
+    "emailservice",
+    "redis",
+    "recommendationservice",
+    "adservice",
+    "currencyservice",
+    "checkoutservice",
+    "shippingservice",
+    "productcatalogservice",
+    "cartservice",
+    "paymentservice",
+    "frontend-external",
+    "frontend"
+   ],
+   "baro+120s_rank": [
+    "emailservice",
+    "redis",
+    "cartservice",
+    "recommendationservice",
+    "currencyservice",
+    "shippingservice",
+    "adservice",
+    "checkoutservice",
+    "productcatalogservice",
+    "paymentservice",
+    "frontend",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "redis",
+    "adservice",
+    "recommendationservice",
+    "currencyservice",
+    "checkoutservice",
+    "shippingservice",
+    "emailservice",
+    "productcatalogservice",
+    "paymentservice",
+    "cartservice",
+    "frontend",
+    "frontend-external"
+   ],
    "secs": 4.6
   },
   {
@@ -694,7 +1364,49 @@
     "frontend",
     "frontend-external"
    ],
-   "secs": 4.9
+   "nsigma_rank": [
+    "emailservice",
+    "checkoutservice",
+    "cartservice",
+    "adservice",
+    "shippingservice",
+    "productcatalogservice",
+    "currencyservice",
+    "paymentservice",
+    "redis",
+    "frontend",
+    "recommendationservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "emailservice",
+    "checkoutservice",
+    "cartservice",
+    "productcatalogservice",
+    "paymentservice",
+    "adservice",
+    "currencyservice",
+    "shippingservice",
+    "recommendationservice",
+    "frontend",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "emailservice",
+    "cartservice",
+    "redis",
+    "shippingservice",
+    "adservice",
+    "checkoutservice",
+    "productcatalogservice",
+    "currencyservice",
+    "paymentservice",
+    "frontend",
+    "recommendationservice",
+    "frontend-external"
+   ],
+   "secs": 5.0
   },
   {
    "case": "re2ob_emailservice_mem_3",
@@ -735,7 +1447,49 @@
     "cartservice",
     "paymentservice"
    ],
-   "secs": 4.8
+   "nsigma_rank": [
+    "emailservice",
+    "checkoutservice",
+    "recommendationservice",
+    "shippingservice",
+    "adservice",
+    "redis",
+    "productcatalogservice",
+    "frontend",
+    "frontend-external",
+    "cartservice",
+    "currencyservice",
+    "paymentservice"
+   ],
+   "baro+120s_rank": [
+    "emailservice",
+    "redis",
+    "checkoutservice",
+    "recommendationservice",
+    "shippingservice",
+    "adservice",
+    "frontend",
+    "productcatalogservice",
+    "frontend-external",
+    "cartservice",
+    "currencyservice",
+    "paymentservice"
+   ],
+   "nsigma+120s_rank": [
+    "recommendationservice",
+    "shippingservice",
+    "adservice",
+    "frontend",
+    "redis",
+    "productcatalogservice",
+    "frontend-external",
+    "cartservice",
+    "checkoutservice",
+    "emailservice",
+    "currencyservice",
+    "paymentservice"
+   ],
+   "secs": 4.9
   },
   {
    "case": "re2ob_emailservice_socket_3",
@@ -776,6 +1530,48 @@
     "frontend-external",
     "frontend"
    ],
+   "nsigma_rank": [
+    "emailservice",
+    "recommendationservice",
+    "frontend",
+    "shippingservice",
+    "cartservice",
+    "paymentservice",
+    "redis",
+    "currencyservice",
+    "productcatalogservice",
+    "adservice",
+    "frontend-external",
+    "checkoutservice"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "emailservice",
+    "recommendationservice",
+    "checkoutservice",
+    "cartservice",
+    "paymentservice",
+    "shippingservice",
+    "adservice",
+    "frontend",
+    "frontend-external",
+    "currencyservice",
+    "productcatalogservice"
+   ],
+   "nsigma+120s_rank": [
+    "recommendationservice",
+    "checkoutservice",
+    "paymentservice",
+    "cartservice",
+    "redis",
+    "adservice",
+    "currencyservice",
+    "productcatalogservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "shippingservice"
+   ],
    "secs": 4.9
   },
   {
@@ -814,6 +1610,48 @@
     "paymentservice",
     "shippingservice",
     "emailservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "nsigma_rank": [
+    "productcatalogservice",
+    "recommendationservice",
+    "cartservice",
+    "frontend",
+    "adservice",
+    "paymentservice",
+    "checkoutservice",
+    "emailservice",
+    "shippingservice",
+    "redis",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "productcatalogservice",
+    "recommendationservice",
+    "cartservice",
+    "frontend",
+    "checkoutservice",
+    "adservice",
+    "paymentservice",
+    "shippingservice",
+    "emailservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "cartservice",
+    "recommendationservice",
+    "paymentservice",
+    "frontend",
+    "adservice",
+    "emailservice",
+    "shippingservice",
+    "checkoutservice",
+    "redis",
+    "productcatalogservice",
     "currencyservice",
     "frontend-external"
    ],
@@ -858,7 +1696,49 @@
     "cartservice",
     "frontend-external"
    ],
-   "secs": 4.3
+   "nsigma_rank": [
+    "productcatalogservice",
+    "recommendationservice",
+    "paymentservice",
+    "frontend",
+    "checkoutservice",
+    "emailservice",
+    "redis",
+    "adservice",
+    "currencyservice",
+    "shippingservice",
+    "cartservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "productcatalogservice",
+    "recommendationservice",
+    "paymentservice",
+    "frontend",
+    "checkoutservice",
+    "emailservice",
+    "shippingservice",
+    "adservice",
+    "currencyservice",
+    "cartservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "emailservice",
+    "paymentservice",
+    "frontend",
+    "checkoutservice",
+    "redis",
+    "shippingservice",
+    "adservice",
+    "productcatalogservice",
+    "currencyservice",
+    "recommendationservice",
+    "cartservice",
+    "frontend-external"
+   ],
+   "secs": 4.4
   },
   {
    "case": "re2ob_productcatalogservice_disk_2",
@@ -900,7 +1780,49 @@
     "currencyservice",
     "frontend-external"
    ],
-   "secs": 4.7
+   "nsigma_rank": [
+    "productcatalogservice",
+    "cartservice",
+    "recommendationservice",
+    "adservice",
+    "checkoutservice",
+    "frontend",
+    "emailservice",
+    "shippingservice",
+    "paymentservice",
+    "redis",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "productcatalogservice",
+    "redis",
+    "cartservice",
+    "recommendationservice",
+    "adservice",
+    "checkoutservice",
+    "emailservice",
+    "frontend",
+    "shippingservice",
+    "paymentservice",
+    "frontend-external",
+    "currencyservice"
+   ],
+   "nsigma+120s_rank": [
+    "cartservice",
+    "adservice",
+    "checkoutservice",
+    "emailservice",
+    "shippingservice",
+    "recommendationservice",
+    "frontend",
+    "productcatalogservice",
+    "redis",
+    "paymentservice",
+    "frontend-external",
+    "currencyservice"
+   ],
+   "secs": 5.2
   },
   {
    "case": "re2ob_productcatalogservice_loss_3",
@@ -942,6 +1864,48 @@
     "currencyservice",
     "paymentservice",
     "frontend-external"
+   ],
+   "nsigma_rank": [
+    "recommendationservice",
+    "productcatalogservice",
+    "frontend",
+    "adservice",
+    "cartservice",
+    "frontend-external",
+    "shippingservice",
+    "checkoutservice",
+    "emailservice",
+    "currencyservice",
+    "paymentservice",
+    "redis"
+   ],
+   "baro+120s_rank": [
+    "productcatalogservice",
+    "redis",
+    "recommendationservice",
+    "cartservice",
+    "frontend",
+    "adservice",
+    "shippingservice",
+    "checkoutservice",
+    "emailservice",
+    "currencyservice",
+    "frontend-external",
+    "paymentservice"
+   ],
+   "nsigma+120s_rank": [
+    "recommendationservice",
+    "cartservice",
+    "frontend-external",
+    "productcatalogservice",
+    "emailservice",
+    "currencyservice",
+    "adservice",
+    "shippingservice",
+    "frontend",
+    "redis",
+    "checkoutservice",
+    "paymentservice"
    ],
    "secs": 4.1
   },
@@ -986,7 +1950,49 @@
     "emailservice",
     "frontend-external"
    ],
-   "secs": 4.0
+   "nsigma_rank": [
+    "productcatalogservice",
+    "recommendationservice",
+    "cartservice",
+    "adservice",
+    "frontend",
+    "checkoutservice",
+    "emailservice",
+    "shippingservice",
+    "currencyservice",
+    "redis",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "productcatalogservice",
+    "recommendationservice",
+    "cartservice",
+    "checkoutservice",
+    "adservice",
+    "frontend",
+    "shippingservice",
+    "currencyservice",
+    "emailservice",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "cartservice",
+    "emailservice",
+    "recommendationservice",
+    "productcatalogservice",
+    "shippingservice",
+    "checkoutservice",
+    "frontend",
+    "adservice",
+    "redis",
+    "paymentservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "secs": 4.2
   },
   {
    "case": "re2ob_productcatalogservice_socket_1",
@@ -1028,7 +2034,49 @@
     "currencyservice",
     "frontend-external"
    ],
-   "secs": 4.6
+   "nsigma_rank": [
+    "productcatalogservice",
+    "recommendationservice",
+    "cartservice",
+    "frontend",
+    "paymentservice",
+    "emailservice",
+    "checkoutservice",
+    "adservice",
+    "shippingservice",
+    "currencyservice",
+    "redis",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "productcatalogservice",
+    "cartservice",
+    "recommendationservice",
+    "checkoutservice",
+    "frontend",
+    "paymentservice",
+    "shippingservice",
+    "emailservice",
+    "adservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "cartservice",
+    "paymentservice",
+    "frontend",
+    "recommendationservice",
+    "emailservice",
+    "checkoutservice",
+    "shippingservice",
+    "adservice",
+    "redis",
+    "productcatalogservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "secs": 4.8
   },
   {
    "case": "re2ob_recommendationservice_cpu_1",
@@ -1068,7 +2116,49 @@
     "paymentservice",
     "frontend-external"
    ],
-   "secs": 4.7
+   "nsigma_rank": [
+    "recommendationservice",
+    "currencyservice",
+    "cartservice",
+    "emailservice",
+    "adservice",
+    "productcatalogservice",
+    "frontend",
+    "redis",
+    "checkoutservice",
+    "paymentservice",
+    "shippingservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "recommendationservice",
+    "currencyservice",
+    "cartservice",
+    "emailservice",
+    "productcatalogservice",
+    "adservice",
+    "checkoutservice",
+    "frontend",
+    "shippingservice",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "emailservice",
+    "cartservice",
+    "currencyservice",
+    "productcatalogservice",
+    "shippingservice",
+    "redis",
+    "adservice",
+    "frontend",
+    "checkoutservice",
+    "recommendationservice",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "secs": 5.0
   },
   {
    "case": "re2ob_recommendationservice_delay_2",
@@ -1108,7 +2198,49 @@
     "paymentservice",
     "frontend-external"
    ],
-   "secs": 4.8
+   "nsigma_rank": [
+    "recommendationservice",
+    "frontend",
+    "productcatalogservice",
+    "checkoutservice",
+    "cartservice",
+    "adservice",
+    "redis",
+    "shippingservice",
+    "currencyservice",
+    "paymentservice",
+    "emailservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "recommendationservice",
+    "frontend",
+    "productcatalogservice",
+    "adservice",
+    "shippingservice",
+    "checkoutservice",
+    "emailservice",
+    "paymentservice",
+    "currencyservice",
+    "cartservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "adservice",
+    "frontend",
+    "redis",
+    "shippingservice",
+    "currencyservice",
+    "checkoutservice",
+    "emailservice",
+    "productcatalogservice",
+    "paymentservice",
+    "recommendationservice",
+    "cartservice",
+    "frontend-external"
+   ],
+   "secs": 5.1
   },
   {
    "case": "re2ob_recommendationservice_disk_1",
@@ -1147,7 +2279,49 @@
     "frontend-external",
     "checkoutservice"
    ],
-   "secs": 4.6
+   "nsigma_rank": [
+    "recommendationservice",
+    "emailservice",
+    "adservice",
+    "productcatalogservice",
+    "currencyservice",
+    "cartservice",
+    "shippingservice",
+    "redis",
+    "paymentservice",
+    "frontend",
+    "checkoutservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "recommendationservice",
+    "redis",
+    "emailservice",
+    "adservice",
+    "checkoutservice",
+    "productcatalogservice",
+    "cartservice",
+    "shippingservice",
+    "currencyservice",
+    "frontend",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "emailservice",
+    "adservice",
+    "checkoutservice",
+    "productcatalogservice",
+    "currencyservice",
+    "shippingservice",
+    "recommendationservice",
+    "redis",
+    "paymentservice",
+    "cartservice",
+    "frontend-external",
+    "frontend"
+   ],
+   "secs": 4.8
   },
   {
    "case": "re2ob_recommendationservice_loss_3",
@@ -1189,7 +2363,49 @@
     "checkoutservice",
     "frontend-external"
    ],
-   "secs": 4.4
+   "nsigma_rank": [
+    "recommendationservice",
+    "productcatalogservice",
+    "frontend",
+    "adservice",
+    "paymentservice",
+    "shippingservice",
+    "currencyservice",
+    "emailservice",
+    "cartservice",
+    "redis",
+    "checkoutservice",
+    "frontend-external"
+   ],
+   "baro+120s_rank": [
+    "recommendationservice",
+    "redis",
+    "productcatalogservice",
+    "frontend",
+    "adservice",
+    "cartservice",
+    "shippingservice",
+    "currencyservice",
+    "emailservice",
+    "checkoutservice",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "productcatalogservice",
+    "adservice",
+    "frontend",
+    "recommendationservice",
+    "currencyservice",
+    "shippingservice",
+    "cartservice",
+    "emailservice",
+    "paymentservice",
+    "redis",
+    "checkoutservice",
+    "frontend-external"
+   ],
+   "secs": 4.5
   },
   {
    "case": "re2ob_recommendationservice_mem_3",
@@ -1230,7 +2446,49 @@
     "frontend-external",
     "currencyservice"
    ],
-   "secs": 4.7
+   "nsigma_rank": [
+    "recommendationservice",
+    "frontend",
+    "emailservice",
+    "cartservice",
+    "checkoutservice",
+    "adservice",
+    "productcatalogservice",
+    "redis",
+    "paymentservice",
+    "shippingservice",
+    "frontend-external",
+    "currencyservice"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "recommendationservice",
+    "frontend",
+    "cartservice",
+    "checkoutservice",
+    "shippingservice",
+    "emailservice",
+    "adservice",
+    "paymentservice",
+    "productcatalogservice",
+    "frontend-external",
+    "currencyservice"
+   ],
+   "nsigma+120s_rank": [
+    "emailservice",
+    "checkoutservice",
+    "redis",
+    "cartservice",
+    "shippingservice",
+    "adservice",
+    "frontend",
+    "paymentservice",
+    "recommendationservice",
+    "productcatalogservice",
+    "frontend-external",
+    "currencyservice"
+   ],
+   "secs": 5.0
   },
   {
    "case": "re2ob_recommendationservice_socket_3",
@@ -1270,7 +2528,49 @@
     "checkoutservice",
     "frontend-external"
    ],
-   "secs": 4.8
+   "nsigma_rank": [
+    "recommendationservice",
+    "emailservice",
+    "adservice",
+    "frontend",
+    "redis",
+    "cartservice",
+    "productcatalogservice",
+    "shippingservice",
+    "paymentservice",
+    "frontend-external",
+    "currencyservice",
+    "checkoutservice"
+   ],
+   "baro+120s_rank": [
+    "redis",
+    "recommendationservice",
+    "adservice",
+    "frontend",
+    "paymentservice",
+    "checkoutservice",
+    "cartservice",
+    "shippingservice",
+    "emailservice",
+    "productcatalogservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "nsigma+120s_rank": [
+    "emailservice",
+    "redis",
+    "paymentservice",
+    "adservice",
+    "frontend",
+    "shippingservice",
+    "cartservice",
+    "recommendationservice",
+    "productcatalogservice",
+    "checkoutservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "secs": 5.1
   }
  ]
 }

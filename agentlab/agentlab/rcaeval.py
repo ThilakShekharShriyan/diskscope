@@ -184,10 +184,26 @@ def _subset_by_case():
     return {c["case"]: c for c in load_subset()}
 
 
+def inject_offset_s(case, data_root=None):
+    """Seconds from the first metric sample to the injection (only for the matched-time variant)."""
+    import pandas as pd
+    root = data_root or os.environ.get("AGENTLAB_RCAEVAL_DATA") or os.path.join(HERE, "..", "..", "data-ext", "rcaeval")
+    d = os.path.join(root, case)
+    t0 = int(pd.read_parquet(os.path.join(d, "metrics.parquet"), columns=["time"])["time"].min())
+    inj = int(open(os.path.join(d, "inject_time.txt")).read().strip())
+    return inj - t0, inj
+
+
 def task(incident_id):
-    c = _subset_by_case()[incident_id.split(":", 1)[1]]
-    return {"truth": {"components": [c["service"]], "cause": c["fault"]}, "evidence": [],
-            "system": SYSTEM.replace("{services}", ", ".join(OB_SERVICES)), "user": USER, "submit": SUBMIT,
+    variant, case = incident_id.split(":", 1)
+    c = _subset_by_case()[case]
+    user = USER
+    if variant == "rcaeval+t":  # matched condition: the agent gets the injection time, as the classical baselines do
+        off, inj = inject_offset_s(case)
+        user = ("The fault was injected at %d ms epoch (+%dm%02ds from the start of the telemetry). "
+                % (inj * 1000, off // 60, off % 60)) + USER
+    return {"truth": {"components": [c["service"]], "cause": c["fault"]}, "evidence": [], "variant": variant,
+            "system": SYSTEM.replace("{services}", ", ".join(OB_SERVICES)), "user": user, "submit": SUBMIT,
             "tool_text": TOOL_TEXT, "grade": grade, "held_out": False,
             "mock_answer": {"services": ["frontend"], "fault": "cpu", "evidence": [], "summary": "mock"}}
 

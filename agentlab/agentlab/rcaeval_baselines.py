@@ -6,8 +6,9 @@ For each subset case: convert -> write files/sql/digest trees (prepare_data) ->
 score two rankers that need no model:
   digest-rank  services in order of first appearance in the frozen digest
                (metric lines, then log lines, then rare events); no injection time
-  baro         RCAEval's own metric BARO (RobustScaler z-score), given the
-               injection time as in the RCAEval paper protocol
+  baro, nsigma RCAEval's own metric methods, given the injection time as in the
+               RCAEval protocol; also with that time 120 s late (onset-sensitivity check)
+  chance       uniform over the services that are ever a root cause in the subset
 Metrics: AC@k = truth in top k; Avg@5 = mean of AC@1..AC@5 (RCAEval's definitions).
 """
 import argparse
@@ -43,21 +44,31 @@ def digest_rank(text, services):
     return order
 
 
-def baro_rank(case_dir, services):
+def classic_rank(case_dir, method="baro", shift_s=0):
+    """RCAEval's own metric method, called as its main.py does for re2-*: metrics only,
+    +-10 min (600 rows) around the injection time, latency-50 dropped, latency-90 renamed
+    latency, dk_select_useful=False. shift_s moves the injection time given to the method."""
     import pandas as pd
-    from RCAEval.e2e.baro import baro
+    import RCAEval.e2e as E
     from RCAEval.benchmark.scoring import service_ranks
-    # Mirrors RCAEval main.py for baro on re2-*: metrics only, +-10 min (600 rows) around the
-    # injection, latency-50 dropped, latency-90 renamed latency, dk_select_useful=False.
+    from RCAEval.e2e.baro import baro
+    fn = {"baro": baro, "nsigma": E.nsigma}[method]
     df = pd.read_parquet(os.path.join(case_dir, "metrics.parquet"))
     df = df.set_index("time").ffill().bfill().fillna(0.0).reset_index()
-    inject = int(open(os.path.join(case_dir, "inject_time.txt")).read().strip())
+    inject = int(open(os.path.join(case_dir, "inject_time.txt")).read().strip()) + shift_s
     i = int((df["time"] - inject).abs().idxmin())
     df = df.iloc[max(0, i - 600): i + 600]
     df = df.loc[:, ~df.columns.str.endswith("_latency-50")]
     df.columns = [c.replace("_latency-90", "_latency") for c in df.columns]
-    ranks = baro(df, inject, dataset="re2-ob", anomalies=None, dk_select_useful=False)["ranks"]
+    ranks = fn(df, inject, dataset="re2-ob", anomalies=None, dk_select_useful=False)["ranks"]
     return [n.entity for n in service_ranks(ranks)]
+
+
+def baro_rank(case_dir, services=None):
+    return classic_rank(case_dir, "baro")
+
+
+CLASSIC = {"baro": ("baro", 0), "nsigma": ("nsigma", 0), "baro+120s": ("baro", 120), "nsigma+120s": ("nsigma", 120)}
 
 
 def ac(order, truth, k):
@@ -88,20 +99,24 @@ def main(argv=None):
         text = open(os.path.join(a.root, "digest", res["dir"]["digest"], "digest.txt")).read()
         row = dict(c, services=services, digest_rank=digest_rank(text, services), digest_sha=res["digest_sha"])
         if not a.no_baro:
-            row["baro_rank"] = baro_rank(cdir, services)
+            for name, (method, shift) in CLASSIC.items():
+                row[name + "_rank"] = classic_rank(cdir, method, shift)
         row["secs"] = round(time.time() - t0, 1)
         rows.append(row)
-        print("%-40s truth=%-22s digest=%s baro=%s" % (c["case"], c["service"], row["digest_rank"][:3],
-                                                         row.get("baro_rank", [])[:3]), flush=True)
+        print("%-40s truth=%-22s digest=%s nsigma=%s" % (c["case"], c["service"], row["digest_rank"][:3],
+                                                           row.get("nsigma_rank", [])[:3]), flush=True)
     summary = {"n": len(rows), "digest_rank": summarize(rows, "digest_rank")}
+    names = ["digest_rank"]
     if not a.no_baro:
-        summary["baro"] = summarize(rows, "baro_rank")
-    by_fault = {}
-    for f in R.FAULTS:
-        rs = [r for r in rows if r["fault"] == f]
-        by_fault[f] = {k: summarize(rs, k + "_rank" if k == "baro" else k)["avg5"]
-                       for k in (["digest_rank"] + ([] if a.no_baro else ["baro"]))}
-    summary["avg5_by_fault"] = by_fault
+        for name in CLASSIC:
+            summary[name] = summarize(rows, name + "_rank")
+            names.append(name + "_rank")
+    # Chance among the services that are ever a root cause in this subset (5 of 12 in RE2-OB)
+    k_cand = len({r["service"] for r in rows})
+    summary["chance_candidates"] = {"n_candidates": k_cand, "1": 1 / k_cand, "3": min(1, 3 / k_cand),
+                                    "5": min(1, 5 / k_cand), "avg5": sum(min(1, k / k_cand) for k in range(1, 6)) / 5}
+    summary["avg5_by_fault"] = {f: {n: summarize([r for r in rows if r["fault"] == f], n)["avg5"] for n in names}
+                                for f in R.FAULTS}
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     with open(a.out, "w") as f:
         json.dump({"summary": summary, "rows": rows}, f, indent=1)

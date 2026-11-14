@@ -35,7 +35,7 @@ class HarnessTest(unittest.TestCase):
             o = harness.run_one("quiet-plain", arm, harness.MockModel(arm), backend)
             self.assertTrue(o["detail"]["grade"]["submitted"], arm)
             self.assertTrue(o["ok"], arm)  # mock always answers no_fault
-            self.assertEqual(o["operations"], 2)
+            self.assertEqual(o["operations"], 0 if arm == "prior" else 2)
             o = harness.run_one("erofs-a", arm, harness.MockModel(arm), backend)
             self.assertFalse(o["ok"])
 
