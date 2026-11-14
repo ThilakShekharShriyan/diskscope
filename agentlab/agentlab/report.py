@@ -35,7 +35,12 @@ def load(paths):
     statistic and counted separately; runs served by a different model than requested too."""
     runs = []
     for p in paths:
-        rep = json.load(open(p))
+        if p.endswith(".gz"):
+            import gzip
+            with gzip.open(p, "rt") as f:
+                rep = json.load(f)
+        else:
+            rep = json.load(open(p))
         for o in rep["observations"]:
             d = o["detail"]
             if d.get("model") == "mock":

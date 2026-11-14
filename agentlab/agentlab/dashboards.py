@@ -679,8 +679,18 @@ class GrafanaBackend:
             q += [("panelId", str(panel_id)), ("width", str(PANEL_PX[0])), ("height", str(PANEL_PX[1]))]
             path = "/render/d-solo/%s/overview" % DASH_UID
         url = GRAFANA_URL + path + "?" + urllib.parse.urlencode(q)
-        try:
-            return _http("GET", url, auth=("bearer", self.state["sa_token"]), timeout=120, raw=True)
-        except (urllib.error.URLError, OSError) as e:
-            from .harness import InfraError
-            raise InfraError("render failed: %s" % e) from None
+        import random
+        import time
+        for attempt in range(7):  # the renderer answers 429 under concurrent load: back off, then give up as infra
+            try:
+                return _http("GET", url, auth=("bearer", self.state["sa_token"]), timeout=120, raw=True)
+            except urllib.error.HTTPError as e:
+                if e.code != 429 or attempt == 6:
+                    err = e
+                    break
+                time.sleep(min(30, 2 ** attempt) + random.random())
+            except (urllib.error.URLError, OSError) as e:
+                err = e
+                break
+        from .harness import InfraError
+        raise InfraError("render failed: %s" % err) from None
