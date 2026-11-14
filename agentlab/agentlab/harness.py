@@ -83,7 +83,7 @@ class MockModel:
 class LiveModel:
     def __init__(self, model, effort="medium"):
         import anthropic  # only needed for live runs
-        self.client = anthropic.Anthropic()
+        self.client = anthropic.Anthropic(max_retries=8)  # backoff on 429/529 under high --parallel
         self.name, self.effort = model, effort
 
     def turn(self, messages, tools, system):
@@ -106,7 +106,7 @@ class OpenAIModel:
 
     def __init__(self, model, effort="medium"):
         import openai  # only needed for live runs
-        self.client = openai.OpenAI()
+        self.client = openai.OpenAI(max_retries=8)  # backoff on 429 under high --parallel
         self.name, self.effort = model, effort
         self.prev, self.sent = None, 0
 
