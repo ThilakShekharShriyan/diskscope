@@ -194,7 +194,7 @@ def grade(incident, answer, tool_outputs):
 
 def task_spec(incident_id):
     """Everything suite-specific about one task: truth, prompt, submit tool, grader."""
-    if incident_id.startswith(("rcaeval:", "rcaeval+t:")):
+    if incident_id.startswith(("rcaeval:", "rcaeval+t:", "rcaevaltt:", "rcaevaltt+t:")):
         from . import rcaeval
         return rcaeval.task(incident_id)
     inc = ALL[incident_id]

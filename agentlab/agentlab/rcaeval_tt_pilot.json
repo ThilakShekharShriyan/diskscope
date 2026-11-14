@@ -1,0 +1,8 @@
+[
+ "re2tt_ts-auth-service_cpu_1",
+ "re2tt_ts-order-service_mem_1",
+ "re2tt_ts-travel-service_disk_1",
+ "re2tt_ts-travel-service_delay_2",
+ "re2tt_ts-train-service_loss_3",
+ "re2tt_ts-travel-service_socket_3"
+]

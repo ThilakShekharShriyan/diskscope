@@ -50,7 +50,7 @@ def load(paths):
             outs = [c.get("output", "") for c in calls]
             runs.append({
                 "case": o["task"].split(":", 1)[-1], "trial": o["trial"], "model": d["model"],
-                "arm": d["arm"] + ("+time" if d.get("variant") == "rcaeval+t" else ""),
+                "arm": d["arm"] + ("+time" if str(d.get("variant", "")).endswith("+t") else ""),
                 "ac1": g.get("ac1", 1.0 if g.get("component_ok") else 0.0),
                 "ac3": g.get("ac3", 1.0 if g.get("component_ok") else 0.0),
                 "ac5": g.get("ac5", 1.0 if g.get("component_ok") else 0.0),

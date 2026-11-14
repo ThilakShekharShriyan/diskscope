@@ -3,7 +3,7 @@
   python3 -m agentlab prepare --root DIR [--incidents ids]
   python3 -m agentlab prepare-archil --prefix agentlab/<build> [--incidents ids]
   python3 -m agentlab run --backend local|archil --root DIR|--prefix P --arms files,sql,digest
-                          [--incidents ids|main|held-out|rcaeval] [--trials N] [--model mock|claude-...|gpt-...]
+                          [--incidents ids|main|held-out|rcaeval[+t]|rcaevaltt[+t]|rcaevaltt-pilot] [--trials N] [--model mock|claude-...|gpt-...]
                           [--live] [--effort medium] [--max-usd 5] [--parallel N] [--out FILE]
   python3 -m agentlab estimate --pilot RUN.json [--incidents ...] [--trials N]
   python3 -m agentlab.report RUN.json ... [--html FILE]
@@ -31,9 +31,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _ids(arg):
-    if arg in ("rcaeval", "rcaeval+t"):
+    if arg in ("rcaeval", "rcaeval+t", "rcaevaltt", "rcaevaltt+t", "rcaevaltt-pilot"):
         from . import rcaeval
-        return [arg + ":" + c["case"] for c in rcaeval.load_subset()]
+        return rcaeval.ids(arg)
     if arg in (None, "all"):
         return [i["id"] for i in incidents.INCIDENTS + incidents.HELD_OUT]
     if arg == "main":
@@ -41,7 +41,7 @@ def _ids(arg):
     if arg == "held-out":
         return [i["id"] for i in incidents.HELD_OUT]
     ids = arg.split(",")
-    bad = [i for i in ids if i not in incidents.ALL and not i.startswith(("rcaeval:", "rcaeval+t:"))]
+    bad = [i for i in ids if i not in incidents.ALL and not i.startswith(("rcaeval:", "rcaeval+t:", "rcaevaltt:", "rcaevaltt+t:"))]
     if bad:
         sys.exit("unknown incidents: %s" % bad)
     return ids
