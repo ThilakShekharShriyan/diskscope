@@ -163,3 +163,10 @@ class RcaevalToolTextTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MissingLayoutTest(unittest.TestCase):
+    def test_missing_layout_is_infra(self):
+        b = tools.LocalBackend(tempfile.mkdtemp())
+        with self.assertRaises(harness.InfraError):
+            b.call("nope", "digest", "get_digest", {})

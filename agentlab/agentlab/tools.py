@@ -145,6 +145,9 @@ class LocalBackend:
 
     def call(self, incident_id, arm, tool, args):
         d = lambda a: os.path.join(self.root, a, opaque(incident_id, self.salt, a))
+        if arm in ("files", "sql", "digest") and not os.path.isdir(d(arm)):
+            from .harness import InfraError  # prepared data missing: the benchmark's fault, not the agent's
+            raise InfraError("layout missing for this task and arm")
         t0 = time.perf_counter()
         clipped = False
         if arm == "files" and tool == "shell":
