@@ -1,0 +1,152 @@
+[
+ {
+  "case": "re2ob_checkoutservice_cpu_1",
+  "service": "checkoutservice",
+  "fault": "cpu"
+ },
+ {
+  "case": "re2ob_checkoutservice_delay_1",
+  "service": "checkoutservice",
+  "fault": "delay"
+ },
+ {
+  "case": "re2ob_checkoutservice_disk_3",
+  "service": "checkoutservice",
+  "fault": "disk"
+ },
+ {
+  "case": "re2ob_checkoutservice_loss_3",
+  "service": "checkoutservice",
+  "fault": "loss"
+ },
+ {
+  "case": "re2ob_checkoutservice_mem_2",
+  "service": "checkoutservice",
+  "fault": "mem"
+ },
+ {
+  "case": "re2ob_checkoutservice_socket_3",
+  "service": "checkoutservice",
+  "fault": "socket"
+ },
+ {
+  "case": "re2ob_currencyservice_cpu_1",
+  "service": "currencyservice",
+  "fault": "cpu"
+ },
+ {
+  "case": "re2ob_currencyservice_delay_2",
+  "service": "currencyservice",
+  "fault": "delay"
+ },
+ {
+  "case": "re2ob_currencyservice_disk_1",
+  "service": "currencyservice",
+  "fault": "disk"
+ },
+ {
+  "case": "re2ob_currencyservice_loss_2",
+  "service": "currencyservice",
+  "fault": "loss"
+ },
+ {
+  "case": "re2ob_currencyservice_mem_1",
+  "service": "currencyservice",
+  "fault": "mem"
+ },
+ {
+  "case": "re2ob_currencyservice_socket_2",
+  "service": "currencyservice",
+  "fault": "socket"
+ },
+ {
+  "case": "re2ob_emailservice_cpu_3",
+  "service": "emailservice",
+  "fault": "cpu"
+ },
+ {
+  "case": "re2ob_emailservice_delay_1",
+  "service": "emailservice",
+  "fault": "delay"
+ },
+ {
+  "case": "re2ob_emailservice_disk_1",
+  "service": "emailservice",
+  "fault": "disk"
+ },
+ {
+  "case": "re2ob_emailservice_loss_2",
+  "service": "emailservice",
+  "fault": "loss"
+ },
+ {
+  "case": "re2ob_emailservice_mem_3",
+  "service": "emailservice",
+  "fault": "mem"
+ },
+ {
+  "case": "re2ob_emailservice_socket_3",
+  "service": "emailservice",
+  "fault": "socket"
+ },
+ {
+  "case": "re2ob_productcatalogservice_cpu_3",
+  "service": "productcatalogservice",
+  "fault": "cpu"
+ },
+ {
+  "case": "re2ob_productcatalogservice_delay_2",
+  "service": "productcatalogservice",
+  "fault": "delay"
+ },
+ {
+  "case": "re2ob_productcatalogservice_disk_2",
+  "service": "productcatalogservice",
+  "fault": "disk"
+ },
+ {
+  "case": "re2ob_productcatalogservice_loss_3",
+  "service": "productcatalogservice",
+  "fault": "loss"
+ },
+ {
+  "case": "re2ob_productcatalogservice_mem_2",
+  "service": "productcatalogservice",
+  "fault": "mem"
+ },
+ {
+  "case": "re2ob_productcatalogservice_socket_1",
+  "service": "productcatalogservice",
+  "fault": "socket"
+ },
+ {
+  "case": "re2ob_recommendationservice_cpu_1",
+  "service": "recommendationservice",
+  "fault": "cpu"
+ },
+ {
+  "case": "re2ob_recommendationservice_delay_2",
+  "service": "recommendationservice",
+  "fault": "delay"
+ },
+ {
+  "case": "re2ob_recommendationservice_disk_1",
+  "service": "recommendationservice",
+  "fault": "disk"
+ },
+ {
+  "case": "re2ob_recommendationservice_loss_3",
+  "service": "recommendationservice",
+  "fault": "loss"
+ },
+ {
+  "case": "re2ob_recommendationservice_mem_3",
+  "service": "recommendationservice",
+  "fault": "mem"
+ },
+ {
+  "case": "re2ob_recommendationservice_socket_3",
+  "service": "recommendationservice",
+  "fault": "socket"
+ }
+]
