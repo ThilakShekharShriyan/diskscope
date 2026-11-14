@@ -63,7 +63,9 @@ class MockModel:
               "prior": [],
               "sql": [("query", {"sql": "SELECT component, level, count(*) n FROM logs GROUP BY 1,2 ORDER BY n DESC LIMIT 10"}),
                       ("query", {"sql": "SELECT msg FROM logs WHERE level='ERROR' LIMIT 5"})],
-              "digest": [("get_digest", {}), ("drill", {"id": "M1"})]}
+              "digest": [("get_digest", {}), ("drill", {"id": "M1"})],
+              "rcatools": [("describe_case", {}), ("rank_anomalies", {"modality": "metrics", "top_k": 5}),
+                           ("trace_summary", {"service": "frontend", "top_k": 3})]}
 
     def __init__(self, arm, answer=None):
         self.steps = list(self.SCRIPT[arm])
@@ -113,7 +115,8 @@ class OpenAIModel:
     @staticmethod
     def _tools(tools):
         return [{"type": "function", "name": t["name"], "description": t["description"],
-                 "parameters": t["input_schema"], "strict": True} for t in tools]
+                 "parameters": t["input_schema"],
+                 "strict": t.get("strict", True)} for t in tools]  # rcatools: False (RCAEval's schemas)
 
     def _input(self, messages):
         items = []

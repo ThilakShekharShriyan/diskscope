@@ -32,6 +32,8 @@ class HarnessTest(unittest.TestCase):
     def test_mock_runs_every_arm_and_grades(self):
         backend = tools.LocalBackend(self.root, allow_shell=True)
         for arm in tools.ARMS:
+            if arm == "rcatools":  # RCAEval cases only; see test_rcatools
+                continue
             o = harness.run_one("quiet-plain", arm, harness.MockModel(arm), backend)
             self.assertTrue(o["detail"]["grade"]["submitted"], arm)
             self.assertTrue(o["ok"], arm)  # mock always answers no_fault

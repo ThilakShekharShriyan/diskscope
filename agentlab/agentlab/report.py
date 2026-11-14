@@ -50,7 +50,9 @@ def load(paths):
             outs = [c.get("output", "") for c in calls]
             runs.append({
                 "case": o["task"].split(":", 1)[-1], "trial": o["trial"], "model": d["model"],
-                "arm": d["arm"] + ("+time" if d.get("variant") == "rcaeval+t" else ""),
+                # rcatools always shows the injection time (RCAEval's task view), so it is a +time arm
+                "arm": d["arm"] + ("+time" if d.get("variant") == "rcaeval+t" or d["arm"] == "rcatools" else ""),
+                "inspected": _inspected(d, calls),
                 "ac1": g.get("ac1", 1.0 if g.get("component_ok") else 0.0),
                 "ac3": g.get("ac3", 1.0 if g.get("component_ok") else 0.0),
                 "ac5": g.get("ac5", 1.0 if g.get("component_ok") else 0.0),
@@ -72,12 +74,24 @@ def load(paths):
     return runs
 
 
+def _inspected(d, calls):
+    """Inspected@root (RCAEval's evidence metric): a tool call targeted the root-cause service
+    before submit. Exact for rcatools, an input-token proxy for sql/files, None otherwise."""
+    if not str(d.get("variant", "")).startswith("rcaeval"):
+        return None
+    from .rcatools import inspected_root
+    return inspected_root(d["arm"], calls, d["truth"]["components"][0])
+
+
 def _is_err(out):
     s = out.lstrip()[:60].lower()
-    return s.startswith(("sqlite error", "tool error", "error:", "parse error", "runtime error")) or "no such" in s
+    return s.startswith(("sqlite error", "tool error", "error:", "parse error", "runtime error", '{"error"')) \
+        or "no such" in s
 
 
 def _is_empty(out):
+    if out.lstrip().startswith("{"):  # rcatools JSON: empty when its result list is empty
+        return any(k in out for k in ('"ranked": []', '"groups": []', '"rows": []', '"edges": []'))
     lines = [x for x in out.strip().splitlines() if x.strip()]
     return len(lines) == 0 or (len(lines) == 1 and "," in lines[0] and not _is_err(out))  # header only
 
@@ -189,6 +203,13 @@ def summarize(runs):
             s[k] = {"median": quant(xs, 0.5), "p90": quant(xs, 0.9), "sum": sum(xs)}
         s["tool_err_rate"] = sum(r["tool_err"] for r in rows) / max(1, sum(r["calls"] for r in rows))
         s["tool_empty_rate"] = sum(r["tool_empty"] for r in rows) / max(1, sum(r["calls"] for r in rows))
+        ins = [r for r in rows if r["inspected"] is not None]
+        hit = [r["ac1"] for r in ins if r["inspected"]]
+        miss = [r["ac1"] for r in ins if not r["inspected"]]
+        s["inspected_root"] = {"rate": sum(1 for r in ins if r["inspected"]) / len(ins) if ins else None,
+                               "exact": s["arm"].startswith("rcatools"), "n": len(ins),
+                               "ac1_inspected": sum(hit) / len(hit) if hit else None,
+                               "ac1_not_inspected": sum(miss) / len(miss) if miss else None}
         s["unsubmitted"] = sum(1 for r in rows if not r["submitted"])
         s["run_errors"] = sorted({r["error"] for r in rows if r["error"]})
         s["confusion"] = confusion(rows)
@@ -237,21 +258,31 @@ def pct(x):
     return "—" if x is None or x != x else "%.0f%%" % (100 * x)
 
 
+def _ins_txt(i):
+    if i is None or i["rate"] is None:
+        return "—"
+    return pct(i["rate"]) + ("" if i["exact"] else "*")
+
+
 def ci_txt(m):
     lo, hi = m["ci"]
     return "%s (%s–%s)" % (pct(m["mean"]), pct(lo), pct(hi))
 
 
 def markdown(summary, comps, baselines):
-    L = ["| Model | Interface | Cases × trials | Service AC@1 | AC@3 | Fault type | Both right | pass^k | Input tok (med) | $/run (med) | $/correct | Calls (med) | Tool errors |",
-         "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    L = ["| Model | Interface | Cases × trials | Service AC@1 | AC@3 | Fault type | Both right | pass^k | Input tok (med) | $/run (med) | $/correct | Calls (med) | Tool errors | Inspected@root |",
+         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for s in summary:
         c = s["consistency"]
-        L.append("| %s | %s | %d × %s | %s | %s | %s | %s | %s | %.0f | %.3f | %.3f | %.0f | %s |" % (
+        L.append("| %s | %s | %d × %s | %s | %s | %s | %s | %s | %.0f | %.3f | %.3f | %.0f | %s | %s |" % (
             s["model"], s["arm"], s["cases"], s["trials"], ci_txt(s["ac1"]), pct(s["ac3"]["mean"]),
             ci_txt(s["fault_ok"]), ci_txt(s["correct"]), pct(c["pass_hat_k"]) if c else "—",
             s["in_tok"]["median"], s["usd"]["median"], s["usd_per_correct"], s["calls"]["median"],
-            pct(s["tool_err_rate"])))
+            pct(s["tool_err_rate"]), _ins_txt(s["inspected_root"])))
+    L += ["", "Inspected@root (RCAEval's evidence metric): a tool call named the root-cause service before submit. "
+          "Exact for rcatools (a service/name argument, RCAEval's rule); * = proxy for sql/files (the name appears "
+          "as a token in the query/command); — = not measurable (digest, prior). rcatools always shows the "
+          "injection time, so it is labelled +time."]
     if baselines:
         L += ["", "No-LLM reference on the same cases: " + "; ".join(
             "%s AC@1 %s, Avg@5 %s" % (k, pct(v["1"]), pct(v["avg5"])) for k, v in baselines.items())]
@@ -366,10 +397,10 @@ def render_html(summary, comps, baselines, sources):
             ci_txt(s["fault_ok"]), ci_txt(s["correct"]), pct(c["pass_hat_k"]) if c else "—",
             "%.0f" % s["in_tok"]["median"], pct(s["cache_share"]["median"]), "$%.3f" % s["usd"]["median"],
             "$%.3f" % s["usd_per_correct"], "%.0f" % s["calls"]["median"], "%.0f s" % s["model_s"]["median"],
-            pct(s["tool_err_rate"]), pct(s["tool_empty_rate"])])) + "</tr>")
+            pct(s["tool_err_rate"]), pct(s["tool_empty_rate"]), _ins_txt(s["inspected_root"])])) + "</tr>")
     comp_items = "".join("<li>%s</li>" % html.escape(x[2:]) for x in md.split("\n") if x.startswith("- "))
     heads = ["Model", "Interface", "Cases × trials", "Service AC@1", "AC@3", "Fault type", "Both right", "pass^k",
-             "Input tok", "Cached", "$/run", "$/correct", "Calls", "Model time", "Tool err", "Empty"]
+             "Input tok", "Cached", "$/run", "$/correct", "Calls", "Model time", "Tool err", "Empty", "Inspected@root"]
     return """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AgentLab results</title><style>%s</style></head><body>
 <header class="wrap"><div class="eyebrow">DiskScope · Phase 3 · AgentLab</div><h1>Which interface helps an agent diagnose an incident?</h1>
@@ -378,7 +409,7 @@ def render_html(summary, comps, baselines, sources):
 <section class="wrap"><div class="panel">%s</div></section>
 <section class="wrap"><div class="panel">%s</div></section>
 <section class="wrap"><h2>All numbers</h2><div class="tablewrap"><table><tr>%s</tr>%s</table></div>
-<p class="foot">Medians for tokens, cost, calls and time. Tool err = tool results that were errors; Empty = header-only or empty results.</p></section>
+<p class="foot">Medians for tokens, cost, calls and time. Tool err = tool results that were errors; Empty = header-only or empty results. Inspected@root = a tool call named the root-cause service before submit (RCAEval's rule, exact for rcatools; * = input-token proxy for sql/files).</p></section>
 <section class="wrap"><h2>Paired differences</h2><ul class="notes" style="display:block">%s</ul>
 <p class="foot">Per case, trials averaged; 95%% paired bootstrap over cases; exact McNemar on per-case majority correctness. With about 30 cases, differences under ~15 points are within noise.</p></section>
 <section class="wrap"><h2>Which fault types get confused</h2><div class="panel" style="display:flex;flex-wrap:wrap;gap:24px">%s</div></section>
