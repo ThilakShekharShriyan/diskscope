@@ -41,4 +41,23 @@ python3 -m agentlab run --backend archil --prefix agentlab/<build> --incidents e
 python3 -m agentlab run --backend archil --prefix agentlab/<build> --model claude-opus-5-5 --live --max-usd 5
 ```
 
+## RCAEval suites (real fault injections)
+
+| Ids | Dataset | App | Subset |
+|---|---|---|---|
+| `rcaeval:<case>`, `rcaeval+t:<case>` | RE2-OB | Online Boutique, 12 services | `rcaeval_subset.json` |
+| `rcaevaltt:<case>`, `rcaevaltt+t:<case>` | RE2-TT | Train Ticket, 68 services and databases | `rcaeval_tt_subset.json` |
+
+The `+t` variant also tells the agent the injection time; it reads the same layout. Each subset is 30 cases, one repetition per (service, fault), chosen by seed and committed before any scoring. `--incidents rcaevaltt-pilot` is a fixed six-case pilot (one per fault). The service enum comes from the metric-column prefixes, so it describes the app, not the labels.
+
+```sh
+# Download the 30 TT cases (metrics, logs, traces) and build the layouts: ~6 min with 4 processes, ~2.2 GB peak per process
+python -m agentlab.rcaeval_baselines --dataset re2-tt --data ../data-ext/rcaeval-tt-full \
+    --root ../data-ext/al-rcaeval-tt --out tt-baselines.json --jobs 4 --download
+AGENTLAB_RCAEVAL_TT_DATA=../data-ext/rcaeval-tt-full python -m agentlab run --root ../data-ext/al-rcaeval-tt \
+    --incidents rcaevaltt-pilot --arms sql,digest --model claude-opus-5-5 --live --max-usd 3
+```
+
+`AGENTLAB_RCAEVAL_TT_DATA` is needed only by `rcaevaltt+t`, which reads the injection time.
+
 A live model can only use `shell` through Archil, never on this machine. The local backend's shell is enabled only for the scripted mock model.
