@@ -4,7 +4,7 @@
   python3 -m agentlab prepare-archil --prefix agentlab/<build> [--incidents ids]
   python3 -m agentlab upload-archil --root ../data-ext/al-rcaeval --prefix agentlab/rc1 [--parallel 10]
   python3 -m agentlab run --backend local|archil --root DIR|--prefix P --arms files,sql,digest
-                          [--incidents ids|main|held-out|rcaeval] [--trials N] [--model mock|claude-...|gpt-...]
+                          [--incidents ids|main|held-out|rcaeval|rcaevalmix|rcaevalq] [--trials N] [--model mock|claude-...|gpt-...]
                           [--live] [--effort medium] [--max-usd 5] [--parallel N] [--out FILE]
   python3 -m agentlab estimate --pilot RUN.json [--incidents ...] [--trials N]
   python3 -m agentlab lessons build --runs RUN.json ... --out-dir lessons/ [--dry-run] [--max-usd 2]
@@ -38,6 +38,9 @@ def _ids(arg):
     if arg in ("rcaeval", "rcaeval+t"):
         from . import rcaeval
         return [arg + ":" + c["case"] for c in rcaeval.load_subset()]
+    if arg in ("rcaevalmix", "rcaevalq"):  # mixed suite with healthy controls / all 30 healthy windows
+        from . import rcaeval_controls as RC
+        return RC.mix_ids() if arg == "rcaevalmix" else RC.quiet_ids()
     if arg in (None, "all"):
         return [i["id"] for i in incidents.INCIDENTS + incidents.HELD_OUT]
     if arg == "main":
@@ -45,7 +48,7 @@ def _ids(arg):
     if arg == "held-out":
         return [i["id"] for i in incidents.HELD_OUT]
     ids = arg.split(",")
-    bad = [i for i in ids if i not in incidents.ALL and not i.startswith(("rcaeval:", "rcaeval+t:"))]
+    bad = [i for i in ids if i not in incidents.ALL and not i.startswith(("rcaeval:", "rcaeval+t:", "rcaevalm:", "rcaevalq:"))]
     if bad:
         sys.exit("unknown incidents: %s" % bad)
     return ids
@@ -115,7 +118,7 @@ def cmd_run(a):
     arms = a.arms.split(",")
     from . import lessons
     for arm in arms:
-        if arm not in tools.ARMS and not lessons.is_lessons_arm(arm):
+        if arm not in tools.ARMS + tools.CONTROL_ARMS and not lessons.is_lessons_arm(arm):
             sys.exit("arm %r not available (implemented: %s; planned: %s)" % (arm, tools.ARMS, tools.PLANNED_ARMS))
     live = a.model != "mock"
     if live and not a.live:

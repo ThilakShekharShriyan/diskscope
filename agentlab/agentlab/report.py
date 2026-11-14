@@ -48,11 +48,21 @@ def load(paths):
             tok = d["tokens"]
             calls = d.get("calls", [])
             outs = [c.get("output", "") for c in calls]
+            answer = d.get("answer") or {}
+            decoy = d.get("decoy") or _decoy_for(o["task"])
+            named = list(dict.fromkeys(answer.get("services") or []))
             runs.append({
                 "case": o["task"].split(":", 1)[-1], "trial": o["trial"], "model": d["model"],
                 # rcatools always shows the injection time (RCAEval's task view), so it is a +time arm
-                "arm": d["arm"] + ("+time" if d.get("variant") == "rcaeval+t" or d["arm"] == "rcatools" else ""),
+                "arm": d["arm"] + ("+time" if d["arm"] == "rcatools" and d.get("variant") == "rcaeval"
+                                   else VARIANT_SUFFIX.get(d.get("variant"), "")),
                 "inspected": _inspected(d, calls),
+                "task": o["task"], "quiet": bool(g.get("quiet")),
+                "false_positive": 1.0 if g.get("false_positive") else 0.0,
+                "false_negative": 1.0 if g.get("false_negative") else 0.0,
+                "decoy_service": decoy["service"] if decoy else None,
+                "decoy_first": 1.0 if decoy and named[:1] == [decoy["service"]] else 0.0,
+                "decoy_any": 1.0 if decoy and decoy["service"] in named[:5] else 0.0,
                 "ac1": g.get("ac1", 1.0 if g.get("component_ok") else 0.0),
                 "ac3": g.get("ac3", 1.0 if g.get("component_ok") else 0.0),
                 "ac5": g.get("ac5", 1.0 if g.get("component_ok") else 0.0),
@@ -79,8 +89,108 @@ def _inspected(d, calls):
     before submit. Exact for rcatools, an input-token proxy for sql/files, None otherwise."""
     if not str(d.get("variant", "")).startswith("rcaeval"):
         return None
+    if not d["truth"].get("components"):  # healthy window: no root cause to inspect
+        return None
     from .rcatools import inspected_root
     return inspected_root(d["arm"], calls, d["truth"]["components"][0])
+
+
+VARIANT_SUFFIX = {"rcaeval+t": "+time", "rcaevalm": "+mix", "rcaevalq": "+mix"}
+
+
+def _is_control(arm):
+    """Control arms (decoy/placebo, mixed suite) get their own Holm family, so adding them to a
+    report does not weaken the main interface comparisons."""
+    return arm.startswith("digest-") or "+mix" in arm
+
+
+def _decoy_for(task):
+    """The innocent service the digest-decoy/-placebo line names for this task (from rcaeval_decoys.json).
+    Looked up for every arm, so the plain digest and the other arms give the base rate."""
+    try:
+        from . import rcaeval_controls
+    except ImportError:  # pragma: no cover - run as a script
+        return None
+    return rcaeval_controls.decoy_for(task)
+
+
+def controls(runs):
+    """Healthy-window false-positive rate, false-negative rate on the mixed suite's real tasks,
+    and decoy capture (decoy service named first / in top 5), per (model, arm)."""
+    groups = {}
+    for r in runs:
+        groups.setdefault((r["model"], r["arm"]), []).append(r)
+    fp, dec = [], []
+    for (model, arm), rows in sorted(groups.items()):
+        quiet = [r for r in rows if r["quiet"]]
+        if quiet:
+            sub = [r for r in quiet if r["submitted"]]
+            k = round(sum(by_case(sub, "false_positive").values())) if sub else 0
+            n = len({r["case"] for r in sub})
+            real = [r for r in rows if not r["quiet"]]
+            fp.append({"model": model, "arm": arm, "quiet_cases": len({r["case"] for r in quiet}), "quiet_runs": len(quiet),
+                       "unsubmitted": len(quiet) - len(sub), "fp_rate": cluster_ci(sub, "false_positive"),
+                       "fp_wilson_cases": wilson(k, n),
+                       "fn_rate": cluster_ci(real, "false_negative") if real else None,
+                       "correct_real": cluster_ci(real, "correct") if real else None})
+        withd = [r for r in rows if r["decoy_service"] and not r["quiet"]]
+        if withd:
+            dec.append({"model": model, "arm": arm, "cases": len({r["case"] for r in withd}), "runs": len(withd),
+                        "decoy_first": cluster_ci(withd, "decoy_first"), "decoy_any": cluster_ci(withd, "decoy_any"),
+                        "ac1": cluster_ci(withd, "ac1")})
+    pairs = []
+    for model in sorted({d["model"] for d in dec}):
+        base = {}
+        for d in dec:
+            if d["model"] == model:
+                base[d["arm"]] = [r for r in groups[(model, d["arm"])] if r["decoy_service"] and not r["quiet"]]
+        for a, b in (("digest-decoy", "digest-placebo"), ("digest-decoy", "digest"), ("digest-placebo", "digest")):
+            for suf in ("", "+mix", "+time"):
+                if a + suf in base and b + suf in base:
+                    pairs.append({"model": model, "a": a + suf, "b": b + suf,
+                                  "decoy_first": paired(base[a + suf], base[b + suf], "decoy_first"),
+                                  "ac1": paired(base[a + suf], base[b + suf], "ac1")})
+    ref = None
+    try:
+        from . import rcaeval_controls
+        ref = rcaeval_controls.threshold_reference(sorted({r["task"] for r in runs}))
+    except ImportError:  # pragma: no cover
+        pass
+    return {"false_positive": fp, "decoy": dec, "decoy_pairs": pairs, "threshold_reference": ref}
+
+
+def controls_markdown(c):
+    L = []
+    if c["false_positive"]:
+        L += ["", "Healthy-window controls (mixed suite; every task offers no_fault). FP = a fault named on a healthy window:", "",
+              "| Model | Interface | Healthy cases × runs | False-positive rate | FP Wilson (cases) | Unsubmitted | False-negative rate (real) | Both right (real) |",
+              "|---|---|---|---|---|---|---|---|"]
+        for s in c["false_positive"]:
+            lo, hi = s["fp_wilson_cases"]
+            L.append("| %s | %s | %d × %d | %s | %s–%s | %d | %s | %s |" % (
+                s["model"], s["arm"], s["quiet_cases"], s["quiet_runs"], ci_txt(_m(s["fp_rate"])), pct(lo), pct(hi),
+                s["unsubmitted"], ci_txt(_m(s["fn_rate"])) if s["fn_rate"] else "—",
+                ci_txt(_m(s["correct_real"])) if s["correct_real"] else "—"))
+        ref = c.get("threshold_reference")
+        if ref:
+            L += ["", "No-LLM reference: answer no_fault iff the plain digest's METRICS section is empty: "
+                      "false positives %d/%d healthy windows, false negatives %d/%d real windows." % (ref["fp"] + ref["fn"])]
+    if c["decoy"]:
+        L += ["", "Decoy capture: how often the innocent service named by the inserted digest line is the agent's first "
+                  "answer (base rate = same service on arms without the line):", "",
+              "| Model | Interface | Cases × runs | Decoy named first | Decoy in top 5 | Service AC@1 |", "|---|---|---|---|---|---|"]
+        for s in c["decoy"]:
+            L.append("| %s | %s | %d × %d | %s | %s | %s |" % (s["model"], s["arm"], s["cases"], s["runs"],
+                                                       ci_txt(_m(s["decoy_first"])), ci_txt(_m(s["decoy_any"])), ci_txt(_m(s["ac1"]))))
+        for p in c["decoy_pairs"]:
+            parts = ["%s %+.0fpt (%+.0f, %+.0f)" % (k, 100 * p[k]["diff"], 100 * p[k]["ci"][0], 100 * p[k]["ci"][1])
+                     for k in ("decoy_first", "ac1") if p[k]]
+            L.append("- %s: %s − %s: %s" % (p["model"], p["a"], p["b"], "; ".join(parts)))
+    return "\n".join(L)
+
+
+def _m(pc):
+    return {"mean": pc[0], "ci": pc[1]}
 
 
 def _is_err(out):
@@ -244,7 +354,8 @@ def holm(comps):
     """Holm-adjusted McNemar p-values, within each family (one model's arm pairs, or one arm's model pair)."""
     fams = {}
     for c in comps:
-        fams.setdefault(c.get("model") or ("arm:" + c["arm"]), []).append(c)
+        ctl = any(_is_control(x) for x in (c["a"], c["b"], c.get("arm", "")))
+        fams.setdefault((c.get("model") or ("arm:" + c["arm"])) + (":controls" if ctl else ""), []).append(c)
     for fam in fams.values():
         order = sorted(fam, key=lambda c: c["mcnemar_correct"]["p"])
         m, run = len(order), 0.0
@@ -445,7 +556,8 @@ def main(argv=None):
     p.add_argument("--json")
     a = p.parse_args(argv)
     runs = load(a.runs)
-    summary, comps = summarize(runs)
+    ctl = controls(runs)
+    summary, comps = summarize([r for r in runs if not r["quiet"]])  # healthy windows: controls() only
     baselines = None
     if a.baselines:
         bs = json.load(open(a.baselines))["summary"]
@@ -455,7 +567,7 @@ def main(argv=None):
                 baselines[label] = bs[k]
         if "chance_candidates" in bs:
             baselines["chance (%d candidates)" % bs["chance_candidates"]["n_candidates"]] = bs["chance_candidates"]
-    md = markdown(summary, comps, baselines)
+    md = markdown(summary, comps, baselines) + controls_markdown(ctl)
     if EXCLUDED:
         md += "\n\nExcluded (infra failure or served by another model): %d runs: %s" % (
             len(EXCLUDED), "; ".join("%s/%s/%s: %s" % (x["model"], x["arm"], x["case"], x["error"]) for x in EXCLUDED[:10]))
@@ -463,10 +575,15 @@ def main(argv=None):
     if a.md:
         open(a.md, "w").write(md + "\n")
     if a.json:
-        json.dump({"summary": summary, "comparisons": comps}, open(a.json, "w"), indent=1, default=str)
+        json.dump({"summary": summary, "comparisons": comps, "controls": ctl}, open(a.json, "w"), indent=1, default=str)
     if a.html:
         os.makedirs(os.path.dirname(a.html) or ".", exist_ok=True)
-        open(a.html, "w").write(render_html(summary, comps, baselines, a.runs))
+        page = render_html(summary, comps, baselines, a.runs)
+        cmd = controls_markdown(ctl)
+        if cmd:  # plain pre-formatted block; keeps render_html untouched
+            page = page.replace("<footer", '<section class="wrap"><h2>Controls</h2><pre class="panel" style="white-space:pre-wrap">'
+                                + html.escape(cmd.strip()) + "</pre></section><footer", 1)
+        open(a.html, "w").write(page)
         print("wrote", a.html)
 
 
