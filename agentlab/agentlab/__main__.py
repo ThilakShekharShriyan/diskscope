@@ -114,6 +114,10 @@ def cmd_run(a):
                      % a.lessons_dir)
     if live and a.backend == "local" and "files" in arms:
         sys.exit("the files arm needs --backend archil for live models (local shell is disabled)")
+    if a.backend == "archil" and "rcatools" in arms:
+        sys.exit("the rcatools arm runs on --backend local (RCAEval's pandas tools over prepare-rcatools views)")
+    if "rcatools" in arms and not all(i.startswith(("rcaeval:", "rcaeval+t:")) for i in _ids(a.incidents)):
+        sys.exit("the rcatools arm serves RCAEval cases only (--incidents rcaeval or rcaeval:<case>,...)")
     jobs = [(i, arm, t) for i in _ids(a.incidents) for arm in arms for t in range(a.trials)]
     random.Random(a.seed).shuffle(jobs)
     # Archil calls per worker: enough for every job to use its whole tool-call budget
@@ -169,7 +173,10 @@ def cmd_run(a):
               "timestamp_unix_secs": int(time.time()),
               "environment": {"variant": "agentlab · %s · %s" % (a.model, a.backend), "runs": a.trials,
                               "notes": "arms=%s output_cap=%d max_turns=%d max_tool_calls=%d parallel=%d effort=%s" % (
-                                  arms, tools.OUTPUT_CAP, harness.MAX_TURNS, harness.MAX_TOOL_CALLS, a.parallel, a.effort),
+                                  arms, tools.OUTPUT_CAP, harness.MAX_TURNS, harness.MAX_TOOL_CALLS, a.parallel, a.effort)
+                                  + (" rcatools=RCAEval %s CaseToolkit, its own cap (%d chars of JSON), injection time shown"
+                                     % (tools._rcatools.RCAEVAL_VERSION, tools._rcatools.MAX_CHARS)
+                                     if "rcatools" in arms else ""),
                               "spent_usd": round(meter.spent, 4), "jobs_planned": len(jobs),
                               "shuffle_seed": a.seed,
                               "disk_suffix": os.environ.get("ARCHIL_DISK_ID", "")[-4:] if a.backend == "archil" else None},
@@ -202,6 +209,13 @@ def cmd_lessons(a):
         sys.exit("lessons build calls %s; set ANTHROPIC_API_KEY or use --dry-run" % a.model)
     lessons.build(a.runs, a.out_dir, model=a.model, max_usd=a.max_usd, variant=a.variant, dry_run=a.dry_run,
                   max_chars=a.max_prompt_chars)
+
+
+def cmd_prepare_rcatools(a):
+    """Build RCAEval task views (rcatools arm) under <root>/rcatools/<opaque>/ from raw cases."""
+    from . import rcatools
+    for i in _ids(a.incidents):
+        print(json.dumps(rcatools.prepare(i, a.data, a.root)), flush=True)
 
 
 def cmd_estimate(a):
@@ -238,6 +252,11 @@ def main(argv=None):
     s.add_argument("--verify-root", help="also prepare locally here and compare digests")
     s.add_argument("--batch", type=int, default=8, help="incidents per exec")
     s.set_defaults(fn=cmd_prepare_archil)
+    s = sub.add_parser("prepare-rcatools", help="RCAEval agent task views for the rcatools arm")
+    s.add_argument("--data", required=True, help="raw RCAEval cases, e.g. ../data-ext/rcaeval")
+    s.add_argument("--root", required=True, help="layout root; views go to <root>/rcatools/<opaque>/")
+    s.add_argument("--incidents", default="rcaeval")
+    s.set_defaults(fn=cmd_prepare_rcatools)
     s = sub.add_parser("run")
     s.add_argument("--backend", choices=["local", "archil"], default="local")
     s.add_argument("--root", help="local layout root (local backend)")

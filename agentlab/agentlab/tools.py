@@ -17,9 +17,11 @@ import time
 
 from .incidents import CAUSES, COMPONENTS
 from .prepare import DEFAULT_SALT, opaque
+from . import rcatools as _rcatools  # stdlib only at import
 
 OUTPUT_CAP = 8000
-ARMS = ["files", "sql", "digest", "prior"]  # implemented; prior = no telemetry tools (control)
+ARMS = ["files", "sql", "digest", "prior", "rcatools"]  # implemented; prior = no telemetry tools (control)
+# rcatools = RCAEval's own agent tools, run by RCAEval's CaseToolkit (rcatools.py); local backend only
 PLANNED_ARMS = ["visual", "mcp"]           # need docker (Prometheus, Loki, Grafana)
 
 SUBMIT = {
@@ -71,6 +73,7 @@ ARM_TOOLS = {
          "input_schema": {"type": "object", "additionalProperties": False,
                           "properties": {"id": {"type": "string"}}, "required": ["id"]},
          "strict": True}],
+    "rcatools": _rcatools.ARM_TOOLS,
 }
 
 SYSTEM = """You are the on-call engineer for an agent platform. Every agent tool call runs as a \
@@ -142,8 +145,13 @@ class LocalBackend:
 
     def __init__(self, root, allow_shell=False, salt=DEFAULT_SALT):
         self.root, self.allow_shell, self.salt = root, allow_shell, salt
+        self._rcatools = None
 
     def call(self, incident_id, arm, tool, args):
+        if arm == "rcatools":  # RCAEval's CaseToolkit over <root>/rcatools/<opaque>/
+            if self._rcatools is None:
+                self._rcatools = _rcatools.RcaToolsBackend(self.root, self.salt)
+            return self._rcatools.call(incident_id, arm, tool, args)
         d = lambda a: os.path.join(self.root, a, opaque(incident_id, self.salt, a))
         if arm in ("files", "sql", "digest") and not os.path.isdir(d(arm)):
             from .harness import InfraError  # prepared data missing: the benchmark's fault, not the agent's

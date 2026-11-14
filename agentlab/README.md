@@ -15,6 +15,22 @@ Research write-up and plan: the shared doc *Observability for Agents, Not Eyebal
 | `digest` | a ranked digest (`get_digest`) plus `drill(id)` for raw evidence | built |
 | `sql+lessons`, `digest+lessons` | the base arm plus a lessons file appended to the system prompt, distilled by one fixed model from graded training-fold runs (leave-one-service-out over RE2-OB) | built (`agentlab/lessons.py`) |
 | `sql+placebo`, `digest+placebo` | control: same length, written by the same model from only the fault list and the tool schema | built |
+| `rcatools` | RCAEval's own agent tools (`describe_case`, `list_metrics`, `get_metric`, `rank_anomalies`, `search_logs`, `trace_summary`, `call_graph`), RCAEval suite only | built (local backend) |
+
+### The `rcatools` arm (RCAEval 1.12.0's agent interface)
+
+RCAEval ships an LLM-agent setup in `RCAEval/agent/`: `export.py` writes a blind task view (cases renamed `re2-ob-0001`…, telemetry CSVs, `task.json`; labels in a separate answers file), `toolkit.py` serves 8 tools over one case (the 7 above plus `submit(ranks, reasoning)`), `react.py` is their reference agent (LiteLLM, prompt v2 in `prompt.py`, 30 steps, temperature 0, forced submit on the last step), `mcp_server.py` serves the same tools over MCP, and `predictions.py` scores AC@1/3/5, Avg@5, Chance@5 and Lift@5 at service and indicator level, plus Inspected@root.
+
+- **The tools are theirs.** `agentlab/rcatools.py` keeps a verbatim copy of their tool names, schemas and descriptions (a test compares it with the installed package), and RCAEval's `CaseToolkit` runs every call. Results are their JSON. **Cap:** theirs (`MAX_CHARS` = 8,000 characters of JSON; `cap()` halves the longest list). Our 8,000-character cut applies only if a result still exceeds it; `calls[*].cap` records which cap applied.
+- **The views are ours.** `prepare-rcatools` builds an export-shaped view under `<root>/rcatools/<opaque>/` from the Hugging Face Parquet: `metrics.csv`, `logs.csv` and `traces.csv`, then `tracets_err`, `tracets_lat`, `logts` and `log_templates.json` via `RCAEval.convert.derive`. `task.json` sets `case_id` to the opaque id and has a ±10-minute standard window. Error text has its paths replaced. Drain3 is needed only for `logts`; without it, `rank_anomalies(logs)` reports that the series is missing.
+- **It shows the injection time.** `describe_case` returns `inject_time`, and every tool splits before and after it, so the report labels this arm `rcatools+time`. Compare it with the `+time` arms.
+- **Same task as the other arms.** It uses our prompt (`rcaeval.SYSTEM`), caps and `submit_answer(services, fault)`. Their `submit` and prompt v2 are not used, so only the tools differ.
+- **Inspected@root** (report column) is RCAEval's rule for rcatools: a `service` or `name` argument belonging to the root-cause service before submit. For sql and files it is a proxy, the name appearing as a token in the query or command (marked `*`). For digest and prior it is `—`.
+
+```sh
+PYTHONPATH=<dir with drain3> .venv/bin/python -m agentlab prepare-rcatools --data ../data-ext/rcaeval --root ../data-ext/al-rcatools
+.venv/bin/python -m agentlab run --root ../data-ext/al-rcatools --arms rcatools --incidents rcaeval [--model ... --live]
+```
 
 Every arm gets the same output cap (8,000 characters per tool result), the same turn cap (20) and input-token cap, and must finish with `submit_answer(component, cause, evidence, summary)`. Grading is deterministic, with no LLM judge.
 
