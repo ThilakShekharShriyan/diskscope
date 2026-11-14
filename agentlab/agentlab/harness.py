@@ -101,7 +101,7 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None):
     system = SYSTEM.format(turns=MAX_TURNS)
     messages = [{"role": "user", "content": "Investigate the last 60 minutes and submit your diagnosis."}]
     trace_id, root = secrets.token_hex(16), secrets.token_hex(8)
-    spans, outputs, calls = [], [], []
+    spans, outputs, calls, texts = [], [], [], []
     totals = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
     answer, error, stop = None, None, None
     t_start = time.time()
@@ -125,6 +125,7 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None):
                             "gen_ai.usage.input_tokens": usage["input_tokens"],
                             "gen_ai.usage.output_tokens": usage["output_tokens"]}))
         messages.append({"role": "assistant", "content": content})
+        texts.extend(getattr(b, "text", "") for b in content if getattr(b, "type", None) == "text")
         if stop == "refusal":
             error = "refusal"
             break
@@ -145,7 +146,8 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None):
                 out, meta = "tool error: %s" % e, {"tool_ms": (time.time() - t1) * 1000}
             tool_ms += meta.get("tool_ms", 0)
             outputs.append(out)
-            calls.append({"tool": b.name, "input": dict(b.input), "chars": len(out), **meta})
+            calls.append({"tool": b.name, "input": dict(b.input), "chars": len(out), "output": out,
+                          "wandered": _wandered(arm, dict(b.input)), **meta})
             spans.append(_span(trace_id, root, "execute_tool %s" % b.name, t1, meta.get("tool_ms", 0),
                                {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": b.name,
                                 "agentlab.result_chars": len(out), "agentlab.backend": backend.name}))
@@ -172,8 +174,15 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None):
         "detail": {"arm": arm, "model": model.name, "backend": backend.name, "answer": answer, "grade": g,
                    "truth": inc["truth"], "held_out": incident_id.startswith("ho-"), "turns": len(spans) - 1 - len(calls),
                    "tokens": totals, "usd": usd, "model_ms": model_ms, "tool_ms": tool_ms, "calls": calls,
-                   "stop_reason": stop},
+                   "stop_reason": stop, "assistant_text": texts,
+                   "wandered": any(c["wandered"] for c in calls)},
     }
+
+
+def _wandered(arm, args):
+    """Files-arm shell commands that leave the arm's own directory (could reach other arms' data)."""
+    cmd = args.get("command", "")
+    return arm == "files" and (".." in cmd or "/mnt" in cmd or "cd /" in cmd or " /" in cmd)
 
 
 def _span(trace_id, parent, name, t0, dur_ms, attrs, span_id=None):

@@ -69,6 +69,30 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(ops[0], "invoke_agent")
         self.assertIn("execute_tool", ops)
 
+    def test_no_path_or_output_names_the_incident(self):
+        backend = tools.LocalBackend(self.root, allow_shell=True)
+        probes = [("files", "shell", {"command": "pwd; ls -R .. | head -50; find / -maxdepth 0"}),
+                  ("sql", "query", {"sql": "PRAGMA database_list"}),
+                  ("digest", "get_digest", {}), ("digest", "drill", {"id": "E1"})]
+        names = [i["id"] for i in incidents.INCIDENTS + incidents.HELD_OUT] + ["ho-"]
+        for inc in ("erofs-a", "quiet-plain"):
+            for arm, tool, args in probes:
+                out, _ = backend.call(inc, arm, tool, args)
+                leaked = [n for n in names if n in out]
+                self.assertEqual(leaked, [], (inc, arm, out[:300]))
+        self.assertFalse(any(n in os.listdir(os.path.join(self.root, "files")) for n in names))
+
+    def test_markers_not_in_shared_text(self):
+        from agentlab import bundle
+        shared = tools.SYSTEM + json.dumps(tools.ARM_TOOLS) + json.dumps(tools.SUBMIT) + bundle.SCHEMA_README
+        for inc in incidents.INCIDENTS + incidents.HELD_OUT:
+            for m in inc["evidence"]:
+                self.assertNotIn(m, shared, (inc["id"], m))
+
+    def test_wander_flag(self):
+        self.assertTrue(harness._wandered("files", {"command": "cat ../../digest/*/digest.txt"}))
+        self.assertFalse(harness._wandered("files", {"command": "grep ERROR logs.jsonl | head"}))
+
     def test_cost(self):
         self.assertAlmostEqual(harness.cost_usd("claude-opus-5-5", {"input_tokens": 1_000_000, "output_tokens": 0,
                                "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}), 4.0)
