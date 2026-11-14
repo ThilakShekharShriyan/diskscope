@@ -93,7 +93,7 @@ class HarnessTest(unittest.TestCase):
         from agentlab import prepare as P, tools as T
         dirs = {a: P.opaque("erofs-a", arm=a) for a in ("files", "sql", "digest", "grafana")}
         self.assertEqual(len(set(dirs.values())), 4)
-        b = T.LocalBackend("/nonexistent", allow_shell=True)
+        b = T.LocalBackend(self.root, allow_shell=True)  # prepared layout (missing layouts are infra errors)
         for cmd in ("cat ../../digest/*/digest.txt", "ls /mnt/archil", "cat ~/x", "/bin/ls"):
             out, meta = b.call("erofs-a", "files", "shell", {"command": cmd})
             self.assertTrue(meta.get("refused"), cmd)
