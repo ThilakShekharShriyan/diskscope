@@ -154,5 +154,14 @@ class UploaderTest(unittest.TestCase):
         self.assertEqual(other, ["files/zzz/a"])
 
 
+class ParityCallsTest(unittest.TestCase):
+    def test_parity_shell_calls_are_allowed(self):
+        from agentlab import parity, tools
+        for _, args in parity.CALLS["files"]:
+            self.assertFalse(tools.leaves_dir(args["command"]), args)
+        for _, args in parity.CALLS["sql"]:
+            self.assertIsNone(tools._SQL_DENY.search(args["sql"]), args)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,7 @@
 
   python3 -m agentlab prepare --root DIR [--incidents ids]
   python3 -m agentlab prepare-archil --prefix agentlab/<build> [--incidents ids]
+  python3 -m agentlab upload-archil --root ../data-ext/al-rcaeval --prefix agentlab/rc1 [--parallel 10]
   python3 -m agentlab run --backend local|archil --root DIR|--prefix P --arms files,sql,digest
                           [--incidents ids|main|held-out|rcaeval] [--trials N] [--model mock|claude-...|gpt-...]
                           [--live] [--effort medium] [--max-usd 5] [--parallel N] [--out FILE]

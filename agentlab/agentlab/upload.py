@@ -257,7 +257,7 @@ class Uploader:
         self.factory = client_factory or (lambda: Archil(max_calls=100000))
         self.log, self.lock, self.local = log, threading.Lock(), threading.local()
         self.stats = {"execs": 0, "rebuild_execs": 0, "part_execs": 0, "finalize_execs": 0, "verify_execs": 0,
-                      "bytes_on_disk": 0, "bytes_rebuilt": 0, "bytes_sent": 0, "pages_patched": 0, "timings": []}
+                      "bytes_rebuilt": 0, "bytes_sent": 0, "pages_patched": 0, "timings": []}
 
     def _client(self):
         if not hasattr(self.local, "c"):
@@ -365,7 +365,8 @@ class Uploader:
         groups, other = case_groups(man)
         self.log("remote already has %d files; %d RCAEval cases, %d other files" % (
             sum(1 for r in man if have.get(r) == man[r]["size"]), len(groups), len(other)))
-        if any(have.get(r) != man[r]["size"] for r in man):
+        new = sum(man[r]["size"] for r in man if have.get(r) != man[r]["size"])
+        if new:
             dirs = sorted({"%s/%s" % (self.wbase, a) for a in self.arms} | {self.wbase + "/_upload"})
             self._exec("setup", "mkdir -p %s" % " ".join(shlex.quote(d) for d in dirs))
         results, errors = [], []
@@ -397,8 +398,8 @@ class Uploader:
         def med(kind, key):
             xs = [t[key] for t in tim if t["kind"] == kind and t[key] is not None]
             return round(statistics.median(xs)) if xs else None
-        summary = {"files": len(man), "bytes": total, "upload_s": round(t_up, 1), "total_s": round(wall, 1),
-                   "throughput_MBps": round(total / 1e6 / max(t_up, 1e-9), 1),
+        summary = {"files": len(man), "bytes": total, "bytes_new": new, "upload_s": round(t_up, 1),
+                   "total_s": round(wall, 1), "throughput_MBps": round(new / 1e6 / max(t_up, 1e-9), 1),
                    "verified": None if bad is None else not bad, "mismatched": bad, "errors": errors,
                    **{k: v for k, v in self.stats.items() if k != "timings"},
                    "median_ms": {k: {"wall": med(k, "wall_ms"), "queue": med(k, "queue_ms"), "execute": med(k, "execute_ms")}

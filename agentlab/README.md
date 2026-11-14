@@ -41,4 +41,11 @@ python3 -m agentlab run --backend archil --prefix agentlab/<build> --incidents e
 python3 -m agentlab run --backend archil --prefix agentlab/<build> --model claude-opus-5-5 --live --max-usd 5
 ```
 
+RCAEval layouts are too big to generate from code, so they are uploaded. An exec takes at most 100 KiB of command (and no stdin), but it has outbound HTTPS, so each microVM fetches its case's Parquet from Hugging Face and re-runs this repo's converter. Files whose sha256 matches the local copy are kept. `telemetry.db` differs in a few hundred SQLite pages, so only those pages are sent. A last pass re-hashes every file from fresh microVMs. Reruns skip files that are already there.
+
+```sh
+python3 -m agentlab upload-archil --root ../data-ext/al-rcaeval --prefix agentlab/rc1 --parallel 10
+python3 -m agentlab.parity --root ../data-ext/al-rcaeval --prefix agentlab/rc1 --n 3   # local vs Archil tool outputs
+```
+
 A live model can only use `shell` through Archil, never on this machine. The local backend's shell is enabled only for the scripted mock model.
