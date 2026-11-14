@@ -126,7 +126,6 @@ All timestamps are Unix epoch milliseconds (UTC). The window is about 24 minutes
                start_ms, dur_ms, status (OK|ERROR), attrs (status_code)
 - metrics.csv  ts_ms,series,value  (1 s steps; series = <service>_<metric>, e.g. cpu, mem,
                diskio, socket, workload, error, latency-50, latency-90)
-- telemetry.db SQLite with tables logs, spans, metrics (same columns; attrs as JSON text)
 """
 
 
@@ -170,8 +169,8 @@ SUBMIT = {
     "strict": True,
 }
 
-TOOL_TEXT = {  # replaces the synthetic suite's wording in the arm tool descriptions
-    "sql": ("Run one read-only SQLite query over the telemetry and get CSV rows (truncated to {cap} chars). "
+TOOL_TEXT = {  # keyed by tool name; replaces the synthetic suite's wording
+    "query": ("Run one read-only SQLite query over the telemetry and get CSV rows (truncated to {cap} chars). "
             "Tables: logs(ts_ms, level, component, msg, trace_id, attrs), spans(trace_id, span_id, parent_id, "
             "name, component, start_ms, dur_ms, status, attrs), metrics(ts_ms, series, value). Times are epoch ms. "
             "Metrics are 1 s steps; series = <service>_<metric> (cpu, mem, diskio, socket, workload, error, "

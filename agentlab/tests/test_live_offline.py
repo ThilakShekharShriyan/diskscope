@@ -7,7 +7,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 try:
     import anthropic
-    from anthropic.types.beta import BetaMessage
+    from anthropic.types import Message
 except ImportError:  # CI and system python have no SDK
     anthropic = None
 
@@ -15,7 +15,7 @@ from agentlab import harness, incidents, prepare, tools  # noqa: E402
 
 
 def _msg(content, stop):
-    return BetaMessage.model_validate({
+    return Message.model_validate({
         "id": "msg_x", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
         "content": content, "stop_reason": stop, "stop_sequence": None,
         "usage": {"input_tokens": 1200, "output_tokens": 80, "cache_read_input_tokens": 900,
@@ -41,7 +41,7 @@ class LiveOfflineTest(unittest.TestCase):
 
         os.environ.setdefault("ANTHROPIC_API_KEY", "test-not-used")
         m = harness.LiveModel("claude-opus-5-5")
-        m.client.beta.messages.create = fake_create
+        m.client.messages.create = fake_create
         with tempfile.TemporaryDirectory() as root:
             prepare.prepare(incidents.ALL["erofs-a"], root)
             o = harness.run_one("erofs-a", "digest", m, tools.LocalBackend(root))
@@ -50,7 +50,8 @@ class LiveOfflineTest(unittest.TestCase):
         self.assertEqual(o["detail"]["tokens"]["cache_read_input_tokens"], 1800)
         self.assertAlmostEqual(o["detail"]["usd"], 2 * (1200 * 4 + 80 * 20 + 900 * 0.2) / 1e6)
         kw = sent[1]
-        self.assertEqual(kw["fallbacks"], "default")
+        self.assertNotIn("fallbacks", kw)  # no server-side model fallback in the benchmark
+        self.assertEqual(o["detail"]["served_by"], ["claude-opus-5-5"])
         self.assertEqual(kw["thinking"], {"type": "adaptive"})
         self.assertEqual(kw["cache_control"], {"type": "ephemeral"})
         # thinking block passed back unchanged, tool result follows

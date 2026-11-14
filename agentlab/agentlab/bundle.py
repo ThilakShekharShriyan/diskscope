@@ -18,7 +18,6 @@ All timestamps are Unix epoch milliseconds (UTC).
 - spans.jsonl  one span per line: trace_id, span_id, parent_id, name, component,
                start_ms, dur_ms, status (OK|ERROR), attrs
 - metrics.csv  ts_ms,series,value  (10 s steps; series = <component>.<span>.<stat> or a gauge)
-- telemetry.db SQLite with tables logs, spans, metrics (same columns; attrs as JSON text)
 
 Each tool call is one trace: gateway -> scheduler.dispatch -> exec-pool.acquire_vm ->
 exec-pool.boot -> <work span> -> commit.flush (writing tasks only).

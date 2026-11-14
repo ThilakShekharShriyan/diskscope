@@ -102,17 +102,38 @@ def leaves_dir(cmd):
     return ".." in cmd or "/mnt" in cmd or "cd /" in cmd or " /" in cmd or cmd.lstrip().startswith("/") or "~" in cmd
 
 
-def cap(text):
+def cap(text, clipped=False):
+    """Every tool result goes through this. clipped: the source already stopped early (more data exists)."""
     if len(text) <= OUTPUT_CAP:
-        return text
-    return text[:OUTPUT_CAP] + "\n[truncated: %d more chars]" % (len(text) - OUTPUT_CAP)
+        return text + ("\n[truncated: more rows not shown]" if clipped else "")
+    return text[:OUTPUT_CAP] + "\n[truncated: %d%s more chars]" % (len(text) - OUTPUT_CAP, "+" if clipped else "")
 
 
-def _csv(rows, cols):
-    out = [",".join(cols)]
-    for r in rows:
-        out.append(",".join("" if v is None else str(v).replace("\n", " ") for v in r))
-    return "\n".join(out)
+_SQL_MAX_BYTES = 4 * OUTPUT_CAP   # rows read / bytes transferred before cap() applies
+_SQL_TIMEOUT_S = 30               # same as the local shell timeout
+_SQL_DENY = re.compile(r"\b(fsdir|readfile|writefile|edit|load_extension|zipfile|sqlar_\w+)\s*\(|^\s*\.", re.I)
+SQL_REFUSED = "error: only plain read-only SELECT queries over the telemetry are allowed"
+
+
+def _sql_csv(cur):
+    """CSV like `sqlite3 -csv -header` (minimal quoting, NULL empty); stops after _SQL_MAX_BYTES."""
+    import csv
+    import io
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow([d[0] for d in cur.description or []])
+    for row in cur:
+        w.writerow(["" if v is None else v for v in row])
+        if buf.tell() > _SQL_MAX_BYTES:
+            return buf.getvalue()[:_SQL_MAX_BYTES], True
+    return buf.getvalue(), False
+
+
+def _authorize(action, *args):
+    """SQLite authorizer: reads only; no ATTACH (other files), no PRAGMA (paths, settings)."""
+    if action in (sqlite3.SQLITE_ATTACH, sqlite3.SQLITE_DETACH, sqlite3.SQLITE_PRAGMA):
+        return sqlite3.SQLITE_DENY
+    return sqlite3.SQLITE_OK
 
 
 class LocalBackend:
@@ -124,6 +145,7 @@ class LocalBackend:
     def call(self, incident_id, arm, tool, args):
         d = lambda a: os.path.join(self.root, a, opaque(incident_id, self.salt, a))
         t0 = time.perf_counter()
+        clipped = False
         if arm == "files" and tool == "shell":
             if leaves_dir(args["command"]):
                 return REFUSE_WANDER, {"tool_ms": 0, "refused": True}
@@ -134,12 +156,17 @@ class LocalBackend:
                                    capture_output=True, text=True, timeout=30)
                 out = p.stdout + p.stderr
         elif arm == "sql" and tool == "query":
+            if _SQL_DENY.search(args["sql"]):
+                return SQL_REFUSED, {"tool_ms": 0, "refused": True}
             db = sqlite3.connect("file:%s?mode=ro" % os.path.join(d("sql"), "telemetry.db"), uri=True)
+            db.set_authorizer(_authorize)
+            deadline = time.monotonic() + _SQL_TIMEOUT_S
+            db.set_progress_handler(lambda: 1 if time.monotonic() > deadline else 0, 10000)
             try:
-                cur = db.execute(args["sql"])
-                out = _csv(cur.fetchmany(2000), [d[0] for d in cur.description or []])
+                out, clipped = _sql_csv(db.execute(args["sql"]))
             except sqlite3.Error as e:
-                out = "sqlite error: %s" % e
+                out = "sqlite error: %s" % ("query took longer than %d s" % _SQL_TIMEOUT_S
+                                            if "interrupted" in str(e) else e)
             finally:
                 db.close()
         elif arm == "digest" and tool == "get_digest":
@@ -151,12 +178,10 @@ class LocalBackend:
             out = index.get(args["id"].strip().upper(), "unknown id %r; valid ids: %s" % (args["id"], ", ".join(index)))
         else:
             out = "error: unknown tool %s for arm %s" % (tool, arm)
-        return cap(out), {"tool_ms": (time.perf_counter() - t0) * 1000}
+        return cap(out, clipped), {"tool_ms": (time.perf_counter() - t0) * 1000}
 
 
 _ID_RX = re.compile(r"^[MLE][0-9]{1,2}$")
-_SQL_MAX_BYTES = 4 * OUTPUT_CAP  # transfer limit; the cap is applied after
-
 
 
 class ArchilBackend:
@@ -174,9 +199,12 @@ class ArchilBackend:
                 return REFUSE_WANDER, {"tool_ms": 0, "refused": True}
             cmd = "cd %s && %s" % (shlex.quote(d("files")), args["command"])
         elif arm == "sql" and tool == "query":
-            # sqlite3 CLI: no interpreter start-up; -readonly; output trimmed before transfer
-            cmd = "sqlite3 -readonly -csv -header %s %s 2>&1 | head -c %d" % (
-                shlex.quote(d("sql") + "/telemetry.db"), shlex.quote(args["sql"]), _SQL_MAX_BYTES)
+            if _SQL_DENY.search(args["sql"]):
+                return SQL_REFUSED, {"tool_ms": 0, "refused": True}
+            # sqlite3 CLI: no interpreter start-up; -readonly -safe (no file/shell functions);
+            # output trimmed before transfer, same CSV dialect and byte limit as LocalBackend
+            cmd = "timeout %d sqlite3 -readonly -safe -csv -header %s %s 2>&1 | head -c %d" % (
+                _SQL_TIMEOUT_S, shlex.quote(d("sql") + "/telemetry.db"), shlex.quote(args["sql"]), _SQL_MAX_BYTES)
         elif arm == "digest" and tool == "get_digest":
             cmd = "cat %s" % shlex.quote(d("digest") + "/digest.txt")
         elif arm == "digest" and tool == "drill":
@@ -187,6 +215,13 @@ class ArchilBackend:
                                                      shlex.quote("unknown id %r" % k))
         else:
             return "error: unknown tool %s for arm %s" % (tool, arm), {"tool_ms": 0}
-        r = self.client.exec(cmd, retry=True)  # every arm tool is read-only
-        return cap(r["stdout"] + r["stderr"]), {"tool_ms": r["wall_ms"], "queue_ms": r["queue_ms"],
+        from .archil import ArchilError
+        try:
+            r = self.client.exec(cmd, retry=True)  # every arm tool is read-only
+        except ArchilError as e:
+            from .harness import InfraError
+            raise InfraError(str(e)) from None
+        out = r["stdout"] + r["stderr"]
+        clipped = arm == "sql" and len(out.encode()) >= _SQL_MAX_BYTES
+        return cap(out, clipped), {"tool_ms": r["wall_ms"], "queue_ms": r["queue_ms"],
                                                 "execute_ms": r["execute_ms"], "exit_code": r["exit_code"]}

@@ -1,8 +1,11 @@
 """Agent loop, grading, and the agent's own trace.
 
 Models:
-  MockModel  - scripted, no network; default; used by tests and CI
-  LiveModel  - Claude via the Anthropic SDK; requires --live AND credentials
+  MockModel   - scripted, no network; default; used by tests and CI
+  LiveModel   - Claude via the Anthropic SDK; requires --live AND ANTHROPIC_API_KEY
+  OpenAIModel - OpenAI Responses API; requires --live AND OPENAI_API_KEY
+No server-side model fallback: a run must be served by the model it names (each
+turn records the model that actually answered; a mismatch is flagged).
 Every run records tokens, dollars, tool calls, latency split (model vs tool),
 whether the incident's evidence ever appeared in a tool result, and an
 OTel-GenAI-shaped trace of the agent itself (invoke_agent / chat / execute_tool).
@@ -22,8 +25,29 @@ PRICES = {"claude-opus-5-5": (4.0, 20.0, 0.20), "claude-sonnet-5-5": (2.0, 10.0,
           # OpenAI standard tier, <=272K-token requests; developers.openai.com/api/docs/pricing, 2026-11-14
           "gpt-5.6-sol": (4.0, 20.0, 0.40), "gpt-5.6-terra": (2.0, 12.0, 0.20), "gpt-5.6-luna": (0.20, 1.20, 0.02),
           "gpt-5.5": (5.0, 30.0, 0.50), "gpt-5.4": (2.5, 15.0, 0.25), "gpt-5.4-mini": (0.75, 4.50, 0.075)}
-MAX_TURNS = 20
-MAX_INPUT_TOKENS = 600_000   # per run, summed over turns; same for every arm
+MAX_TURNS = 20               # model calls per run
+MAX_TOOL_CALLS = 40          # tool calls per run (a model may call several tools per turn)
+MAX_INPUT_TOKENS = 600_000   # per run, summed over turns; same for every arm and provider
+
+
+class InfraError(RuntimeError):
+    """Failure of the benchmark's own machinery (Archil budget/connection, spend cap): the run
+    is stopped and marked infra, never shown to the agent as a tool result."""
+
+
+class SpendMeter:
+    """Live dollars across all concurrent runs, updated after every model turn."""
+
+    def __init__(self, limit=None):
+        import threading
+        self.limit, self.spent, self._lock = limit, 0.0, threading.Lock()
+
+    def add(self, usd):
+        with self._lock:
+            self.spent += usd or 0.0
+
+    def over(self):
+        return self.limit is not None and self.spent >= self.limit
 
 
 class Block:
@@ -62,17 +86,15 @@ class LiveModel:
         self.name, self.effort = model, effort
 
     def turn(self, messages, tools, system):
-        kw = dict(model=self.name, max_tokens=16000, system=system, tools=tools, messages=messages,
-                  thinking={"type": "adaptive"}, output_config={"effort": self.effort},
-                  cache_control={"type": "ephemeral"})
-        if self.name in ("claude-opus-5-5", "claude-sonnet-5-5"):
-            r = self.client.beta.messages.create(betas=["server-side-fallback-2026-07-01"], fallbacks="default", **kw)
-        else:
-            r = self.client.beta.messages.create(**kw)
+        r = self.client.messages.create(
+            model=self.name, max_tokens=16000, system=system, tools=tools, messages=messages,
+            thinking={"type": "adaptive"}, output_config={"effort": self.effort},
+            cache_control={"type": "ephemeral"})
         u = r.usage
         usage = {"input_tokens": u.input_tokens, "output_tokens": u.output_tokens,
                  "cache_read_input_tokens": getattr(u, "cache_read_input_tokens", 0) or 0,
-                 "cache_creation_input_tokens": getattr(u, "cache_creation_input_tokens", 0) or 0}
+                 "cache_creation_input_tokens": getattr(u, "cache_creation_input_tokens", 0) or 0,
+                 "served_by": getattr(r, "model", self.name)}
         return r.content, r.stop_reason, usage
 
 
@@ -128,11 +150,14 @@ class OpenAIModel:
         u = r.usage
         cached = getattr(getattr(u, "input_tokens_details", None), "cached_tokens", 0) or 0
         usage = {"input_tokens": u.input_tokens - cached, "output_tokens": u.output_tokens,
-                 "cache_read_input_tokens": cached, "cache_creation_input_tokens": 0}
+                 "cache_read_input_tokens": cached, "cache_creation_input_tokens": 0,
+                 "reasoning_tokens": getattr(getattr(u, "output_tokens_details", None), "reasoning_tokens", 0) or 0,
+                 "served_by": getattr(r, "model", self.name)}
         if refused:
             stop = "refusal"
         elif r.status == "incomplete":
-            stop = "max_tokens"
+            reason = getattr(getattr(r, "incomplete_details", None), "reason", "") or ""
+            stop = "content_filter" if "filter" in reason else "max_tokens"
         else:
             stop = "tool_use" if any(b.type == "tool_use" for b in content) else "end_turn"
         return content, stop, usage
@@ -179,72 +204,96 @@ def task_spec(incident_id):
 
 
 def arm_tools(arm, tool_text):
+    """The arm's tools, with descriptions replaced per suite (tool_text is keyed by tool name)."""
     out = []
     for t in ARM_TOOLS[arm]:
         t = dict(t)
-        if t["name"] in tool_text or arm in tool_text and t["name"] == "query":
-            t["description"] = tool_text.get(t["name"], tool_text.get(arm)).format(cap=OUTPUT_CAP)
+        if t["name"] in tool_text:
+            t["description"] = tool_text[t["name"]].format(cap=OUTPUT_CAP)
         out.append(t)
     return out
 
 
-def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None):
+def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None, meter=None):
     spec = task_spec(incident_id)
     tools = arm_tools(arm, spec["tool_text"]) + [spec["submit"]]
     system = spec["system"].replace("{turns}", str(MAX_TURNS))
     messages = [{"role": "user", "content": spec["user"]}]
     trace_id, root = secrets.token_hex(16), secrets.token_hex(8)
-    spans, outputs, calls, texts = [], [], [], []
+    spans, outputs, calls, texts, turns_log = [], [], [], [], []
     totals = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
-    answer, error, stop = None, None, None
+    answer, error, stop, infra = None, None, None, False
     t_start = time.time()
     model_ms = tool_ms = 0.0
     for turn in range(MAX_TURNS):
         if sum(totals[k] for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")) > MAX_INPUT_TOKENS:
             error = "input token cap"
             break
+        if meter is not None and meter.over():
+            error, infra = "spend cap reached", True
+            break
         t0 = time.time()
         try:
             content, stop, usage = model.turn(messages, tools, system)
-        except Exception as e:  # noqa: BLE001 - record and stop this run
-            error = "model error: %s" % type(e).__name__
+        except Exception as e:  # noqa: BLE001 - provider/network failure: infra, not a model mistake
+            error, infra = "model error: %s" % type(e).__name__, True
             break
         dt = (time.time() - t0) * 1000
         model_ms += dt
         for k in totals:
             totals[k] += usage.get(k, 0)
+        turn_usd = cost_usd(model.name, usage)
+        if meter is not None:
+            meter.add(turn_usd)
+        uses = [b for b in content if getattr(b, "type", None) == "tool_use"]
+        turns_log.append({"turn": turn, "t_ms": round((t0 - t_start) * 1000), "model_ms": round(dt),
+                          "stop": stop, "served_by": usage.get("served_by", model.name), "n_tool_calls": len(uses),
+                          "usd": turn_usd, **{k: usage.get(k, 0) for k in list(totals) + ["reasoning_tokens"]}})
         spans.append(_span(trace_id, root, "chat %s" % model.name, t0, dt,
                            {"gen_ai.operation.name": "chat", "gen_ai.request.model": model.name,
+                            "gen_ai.response.model": usage.get("served_by", model.name),
                             "gen_ai.usage.input_tokens": usage["input_tokens"],
                             "gen_ai.usage.output_tokens": usage["output_tokens"]}))
         messages.append({"role": "assistant", "content": content})
         texts.extend(getattr(b, "text", "") for b in content if getattr(b, "type", None) == "text")
-        if stop == "refusal":
-            error = "refusal"
+        if stop in ("refusal", "content_filter"):
+            error = stop
             break
-        uses = [b for b in content if getattr(b, "type", None) == "tool_use"]
         if not uses:
             messages.append({"role": "user", "content": "Use the tools, then call submit_answer."})
             continue
         results = []
         for b in uses:
+            if stop == "max_tokens":  # reply was cut off: tool input may be partial, do not run it
+                results.append({"type": "tool_result", "tool_use_id": b.id,
+                                "content": "error: your reply was cut off; send the call again"})
+                continue
             if b.name == "submit_answer":
                 answer = dict(b.input)
                 results.append({"type": "tool_result", "tool_use_id": b.id, "content": "recorded"})
                 continue
+            if len(calls) >= MAX_TOOL_CALLS:
+                results.append({"type": "tool_result", "tool_use_id": b.id,
+                                "content": "error: tool-call budget used up; call submit_answer now"})
+                continue
             t1 = time.time()
             try:
                 out, meta = backend.call(incident_id, arm, b.name, dict(b.input))
+            except InfraError as e:
+                error, infra = "infra: %s" % e, True
+                break
             except Exception as e:  # noqa: BLE001 - surface to the agent as a tool error
                 out, meta = "tool error: %s" % e, {"tool_ms": (time.time() - t1) * 1000}
             tool_ms += meta.get("tool_ms", 0)
             outputs.append(out)
-            calls.append({"tool": b.name, "input": dict(b.input), "chars": len(out), "output": out,
-                          "wandered": _wandered(arm, dict(b.input)), **meta})
+            calls.append({"turn": turn, "t_ms": round((t1 - t_start) * 1000), "tool": b.name, "input": dict(b.input),
+                          "chars": len(out), "output": out, "wandered": _wandered(arm, dict(b.input)), **meta})
             spans.append(_span(trace_id, root, "execute_tool %s" % b.name, t1, meta.get("tool_ms", 0),
                                {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": b.name,
                                 "agentlab.result_chars": len(out), "agentlab.backend": backend.name}))
             results.append({"type": "tool_result", "tool_use_id": b.id, "content": out})
+        if infra:
+            break
         messages.append({"role": "user", "content": results})
         if answer is not None:
             break
@@ -265,8 +314,11 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None):
         "operations": len(calls), "bytes": sum(c["chars"] for c in calls), "error": error, "cleanup_error": None,
         "started_ms": t_start * 1000, "parallel": False,
         "detail": {"arm": arm, "model": model.name, "backend": backend.name, "answer": answer, "grade": g,
-                   "truth": spec["truth"], "held_out": spec["held_out"], "turns": len(spans) - 1 - len(calls),
+                   "truth": spec["truth"], "held_out": spec["held_out"], "turns": len(turns_log),
                    "tokens": totals, "usd": usd, "model_ms": model_ms, "tool_ms": tool_ms, "calls": calls,
+                   "turns_log": turns_log, "infra_error": infra,
+                   "served_by": sorted({t["served_by"] for t in turns_log}),
+                   "model_mismatch": any(not str(t["served_by"]).startswith(model.name) for t in turns_log),
                    "stop_reason": stop, "assistant_text": texts,
                    "wandered": any(c["wandered"] for c in calls)},
     }

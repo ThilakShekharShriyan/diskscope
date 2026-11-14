@@ -3,7 +3,13 @@
   python3 -m agentlab prepare --root DIR [--incidents ids]
   python3 -m agentlab prepare-archil --prefix agentlab/<build> [--incidents ids]
   python3 -m agentlab run --backend local|archil --root DIR|--prefix P --arms files,sql,digest
-                          [--incidents ids] [--trials N] [--model mock|claude-...] [--live] [--out FILE]
+                          [--incidents ids|main|held-out|rcaeval] [--trials N] [--model mock|claude-...|gpt-...]
+                          [--live] [--effort medium] [--max-usd 5] [--parallel N] [--out FILE]
+  python3 -m agentlab estimate --pilot RUN.json [--incidents ...] [--trials N]
+  python3 -m agentlab.report RUN.json ... [--html FILE]
+
+Each finished run is appended to OUT.partial.jsonl immediately, so an interrupted
+run keeps what it paid for.
 
 Live models need --live and credentials (ANTHROPIC_API_KEY for claude-*, OPENAI_API_KEY for gpt-*).
 The mock model never calls the network.
@@ -94,52 +100,68 @@ def cmd_run(a):
     live = a.model != "mock"
     if live and not a.live:
         sys.exit("refusing to call a live model without --live")
+    if live and a.backend == "local" and "files" in arms:
+        sys.exit("the files arm needs --backend archil for live models (local shell is disabled)")
+    jobs = [(i, arm, t) for i in _ids(a.incidents) for arm in arms for t in range(a.trials)]
+    random.Random(a.seed).shuffle(jobs)
+    # Archil calls per worker: enough for every job to use its whole tool-call budget
+    max_calls = a.max_archil_calls or len(jobs) * (harness.MAX_TOOL_CALLS + 2)
+
     def make_backend():
         if a.backend == "local":
             return tools.LocalBackend(a.root, allow_shell=not live)
         from .archil import Archil
-        return tools.ArchilBackend(Archil(max_calls=a.max_archil_calls), a.prefix)
+        return tools.ArchilBackend(Archil(max_calls=max_calls), a.prefix)
 
-    jobs = [(i, arm, t) for i in _ids(a.incidents) for arm in arms for t in range(a.trials)]
-    random.Random(a.seed).shuffle(jobs)
-    obs, lock, stop = [], threading.Lock(), threading.Event()
+    obs, lock = [], threading.Lock()
+    meter = harness.SpendMeter(a.max_usd if live else None)
     run_id = time.strftime("%Y%m%dT%H%M%S")
     trace_dir = os.path.join(os.path.dirname(a.out) or ".", "agentlab-traces-" + run_id)
+    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+    partial = open(a.out + ".partial.jsonl", "a")
     local = threading.local()
 
     def work(job):
-        if stop.is_set():
+        if meter.over():
             return
-        if not hasattr(local, "backend"):  # one backend (one kept-alive Archil connection) per worker
-            local.backend = make_backend()
         i, arm, t = job
-        model = (harness.MockModel(arm, harness.task_spec(i)["mock_answer"]) if not live
-                 else harness.make_model(a.model, a.effort))
-        o = harness.run_one(i, arm, model, local.backend, trial=t, trace_dir=trace_dir)
+        try:
+            if not hasattr(local, "backend"):  # one backend (one kept-alive Archil connection) per worker
+                local.backend = make_backend()
+            model = (harness.MockModel(arm, harness.task_spec(i)["mock_answer"]) if not live
+                     else harness.make_model(a.model, a.effort))
+            o = harness.run_one(i, arm, model, local.backend, trial=t, trace_dir=trace_dir, meter=meter)
+        except Exception as e:  # noqa: BLE001 - keep the other jobs and everything already paid for
+            print("job %s %s %d crashed: %s: %s" % (i, arm, t, type(e).__name__, e), flush=True)
+            return
         o["parallel"] = a.parallel > 1
         with lock:
             obs.append(o)
+            partial.write(json.dumps(o, default=str) + "\n")
+            partial.flush()
             d = o["detail"]
-            spent = sum(x["detail"]["usd"] or 0 for x in obs)
-            print("[%d/%d] %-20s %-6s ok=%-5s calls=%d tok_in=%d usd=%s total=$%.2f %s" % (
-                len(obs), len(jobs), i, arm, o["ok"], o["operations"], d["tokens"]["input_tokens"],
-                "%.4f" % d["usd"] if d["usd"] is not None else "-", spent, o["error"] or ""), flush=True)
-            if live and spent > a.max_usd and not stop.is_set():
-                print("stopping: spent $%.2f > --max-usd %.2f (in-flight runs finish)" % (spent, a.max_usd))
-                stop.set()
+            print("[%d/%d] %-20s %-6s ok=%-5s calls=%d turns=%d usd=%s total=$%.2f %s" % (
+                len(obs), len(jobs), i, arm, o["ok"], o["operations"], d["turns"],
+                "%.4f" % d["usd"] if d["usd"] is not None else "-", meter.spent, o["error"] or ""), flush=True)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=a.parallel) as pool:
-        for f in [pool.submit(work, j) for j in jobs]:
-            f.result()
-    backend = getattr(local, "backend", None)
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=a.parallel) as pool:
+            for f in [pool.submit(work, j) for j in jobs]:
+                f.result()
+    except KeyboardInterrupt:
+        print("interrupted: writing the %d finished runs" % len(obs))
+    partial.close()
+    if meter.over():
+        print("stopped at the spend cap: $%.2f >= --max-usd %.2f" % (meter.spent, a.max_usd))
     report = {"schema_version": 1, "backend": "agentlab-%s" % a.backend, "run_id": run_id,
               "timestamp_unix_secs": int(time.time()),
               "environment": {"variant": "agentlab · %s · %s" % (a.model, a.backend), "runs": a.trials,
-                              "notes": "arms=%s output_cap=%d max_turns=%d parallel=%d" % (arms, tools.OUTPUT_CAP, harness.MAX_TURNS, a.parallel),
+                              "notes": "arms=%s output_cap=%d max_turns=%d max_tool_calls=%d parallel=%d effort=%s" % (
+                                  arms, tools.OUTPUT_CAP, harness.MAX_TURNS, harness.MAX_TOOL_CALLS, a.parallel, a.effort),
+                              "spent_usd": round(meter.spent, 4), "jobs_planned": len(jobs),
                               "shuffle_seed": a.seed,
                               "disk_suffix": os.environ.get("ARCHIL_DISK_ID", "")[-4:] if a.backend == "archil" else None},
               "observations": obs}
-    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     with open(a.out, "w") as f:
         json.dump(report, f, indent=1, default=str)
     print("wrote %s (%d runs, traces in %s)" % (a.out, len(obs), trace_dir))
@@ -190,7 +212,7 @@ def main(argv=None):
     s.add_argument("--effort", default="medium")
     s.add_argument("--live", action="store_true")
     s.add_argument("--max-usd", type=float, default=5.0)
-    s.add_argument("--max-archil-calls", type=int, default=300)
+    s.add_argument("--max-archil-calls", type=int, default=0, help="per worker; 0 = sized from the job count")
     s.add_argument("--seed", type=int, default=1)
     s.add_argument("--parallel", type=int, default=1,
                    help="concurrent runs; keep 1 when comparing Archil latency (fan-out >= 4 slows calls)")
