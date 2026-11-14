@@ -1,0 +1,37 @@
+# Single-binary Loki for historical incident logs: old samples accepted, and ingesters are
+# always queried (logs are pushed with old timestamps and may not be flushed yet).
+auth_enabled: false
+server:
+  http_listen_port: 3100
+  grpc_server_max_recv_msg_size: 104857600
+  log_level: warn
+common:
+  path_prefix: /loki
+  replication_factor: 1
+  ring:
+    kvstore: {store: inmemory}
+  storage:
+    filesystem: {chunks_directory: /loki/chunks, rules_directory: /loki/rules}
+schema_config:
+  configs:
+    - from: "2015-01-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index: {prefix: index_, period: 24h}
+ingester:
+  wal: {dir: /loki/wal, flush_on_shutdown: true}
+querier:
+  query_ingesters_within: 876000h   # 0 would mean "never ask ingesters"; data is pushed with old timestamps
+limits_config:
+  reject_old_samples: false
+  ingestion_rate_mb: 256
+  ingestion_burst_size_mb: 512
+  per_stream_rate_limit: 256MB
+  per_stream_rate_limit_burst: 512MB
+  max_query_length: 0
+  max_query_lookback: 0
+  max_entries_limit_per_query: 5000
+  volume_enabled: true
+analytics:
+  reporting_enabled: false

@@ -1,0 +1,49 @@
+# AgentLab Grafana stack for the `visual` and `mcp` arms. Pinned versions (each >= 2 weeks
+# old when pinned on 2026-11-14). Ports bind to 127.0.0.1 only. Manage it with
+#   python3 -m agentlab grafana up|load|status|down
+name: agentlab-grafana
+services:
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=100y   # incident data is historical (e.g. RCAEval, 2024)
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+      - ./.import:/import:ro
+    ports: ["127.0.0.1:19090:9090"]
+  loki:
+    image: grafana/loki:3.7.9
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    ports: ["127.0.0.1:13100:3100"]
+  renderer:
+    image: grafana/grafana-image-renderer:v5.12.9
+    environment:
+      AUTH_TOKEN: "${AGENTLAB_RENDERER_TOKEN:?start the stack with python3 -m agentlab grafana up}"
+  grafana:
+    image: grafana/grafana:13.2.5
+    depends_on: [prometheus, loki, renderer]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: "${AGENTLAB_GRAFANA_ADMIN_PASSWORD:?start the stack with python3 -m agentlab grafana up}"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_RENDERING_SERVER_URL: http://renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+      GF_RENDERING_RENDERER_TOKEN: "${AGENTLAB_RENDERER_TOKEN:?start the stack with python3 -m agentlab grafana up}"
+      GF_DATE_FORMATS_DEFAULT_TIMEZONE: utc
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["127.0.0.1:13000:3000"]
+volumes:
+  prom-data: {}
+  loki-data: {}

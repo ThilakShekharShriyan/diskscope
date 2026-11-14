@@ -5,7 +5,8 @@ same submit_answer tool. Arms 2-4 run on a backend:
   LocalBackend  - a directory on this machine (shell only with allow_shell=True,
                   which the harness permits for the scripted mock model only)
   ArchilBackend - each tool call is one Archil exec (a fresh microVM) over the disk
-The grafana arms (0 visual, 1 mcp) need the docker stack and are not built yet.
+The grafana arms (visual, mcp) run on dashboards.GrafanaBackend over the docker stack;
+their tools come from that backend (rendered PNGs; the live mcp-grafana tool list).
 """
 import json
 import os
@@ -20,9 +21,10 @@ from .prepare import DEFAULT_SALT, opaque
 from . import rcatools as _rcatools  # stdlib only at import
 
 OUTPUT_CAP = 8000
-ARMS = ["files", "sql", "digest", "prior", "rcatools"]  # implemented; prior = no telemetry tools (control)
+ARMS = ["files", "sql", "digest", "prior", "rcatools", "visual", "mcp"]  # prior = no telemetry tools (control)
 # rcatools = RCAEval's own agent tools, run by RCAEval's CaseToolkit (rcatools.py); local backend only
-PLANNED_ARMS = ["visual", "mcp"]           # need docker (Prometheus, Loki, Grafana)
+PLANNED_ARMS = []
+GRAFANA_ARMS = ["visual", "mcp"]  # need the docker stack and --backend grafana (dashboards.py)
 # Controls: the digest arm's tools over a digest with one inserted line (agentlab/digest_decoy.py);
 # their layouts exist only where rcaeval_controls prepared them
 CONTROL_ARMS = ["digest-decoy", "digest-placebo"]
@@ -48,6 +50,8 @@ SUBMIT = {
 
 ARM_TOOLS = {
     "prior": [],
+    "visual": [],  # supplied by dashboards.GrafanaBackend.arm_tools
+    "mcp": [],     # supplied by dashboards.GrafanaBackend.arm_tools (live tools/list from mcp-grafana)
     "files": [{
         "name": "shell",
         "description": ("Run a shell command in the telemetry directory and get stdout+stderr "
