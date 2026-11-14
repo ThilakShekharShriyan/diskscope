@@ -31,9 +31,17 @@ ARM_FILES = {"files": ["logs.jsonl", "spans.jsonl", "metrics.csv", "README.md"],
 
 def prepare(incident, root, baselines=None, salt=DEFAULT_SALT):
     data = generate.generate(incident["effects"], seed=incident["seed"], baselines=baselines)
-    oid = {a: opaque(incident["id"], salt, a) for a in ("files", "sql", "grafana", "digest")}
-    tmp = os.path.join(root, "_tmp", opaque(incident["id"], salt, "_tmp"))
+    return prepare_data(incident["id"], data, root, salt)
+
+
+def prepare_data(incident_id, data, root, salt=DEFAULT_SALT, readme=None):
+    """Write one telemetry dataset (generated or converted) into every arm's tree."""
+    oid = {a: opaque(incident_id, salt, a) for a in ("files", "sql", "grafana", "digest")}
+    tmp = os.path.join(root, "_tmp", opaque(incident_id, salt, "_tmp"))
     bundle.write_bundle(data, tmp)
+    if readme is not None:
+        with open(os.path.join(tmp, "README.md"), "w") as f:
+            f.write(readme)
     for arm, names in ARM_FILES.items():
         os.makedirs(os.path.join(root, arm, oid[arm]), exist_ok=True)
         for n in names:
@@ -49,5 +57,5 @@ def prepare(incident, root, baselines=None, salt=DEFAULT_SALT):
         with open(os.path.join(root, "digest", oid["digest"], "drill", k + ".txt"), "w") as f:
             f.write(v)
     shutil.rmtree(tmp, ignore_errors=True)  # local only; on Archil the exec owns it, so this works there too
-    return {"id": incident["id"], "dir": oid, "calls": data["calls"],
+    return {"id": incident_id, "dir": oid, "calls": data["calls"],
             "digest_sha": hashlib.sha256(text.encode()).hexdigest()[:12]}

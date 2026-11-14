@@ -13,7 +13,7 @@ import secrets
 import time
 
 from .incidents import ALL
-from .tools import ARM_TOOLS, SUBMIT, SYSTEM, leaves_dir
+from .tools import ARM_TOOLS, OUTPUT_CAP, SUBMIT, SYSTEM, leaves_dir
 
 # $ per million tokens: (input, output, cache read). From the claude-api skill's
 # model table (cached 2026-11-03); recheck before publishing dollar figures.
@@ -37,16 +37,16 @@ class MockModel:
                       ("query", {"sql": "SELECT msg FROM logs WHERE level='ERROR' LIMIT 5"})],
               "digest": [("get_digest", {}), ("drill", {"id": "M1"})]}
 
-    def __init__(self, arm):
+    def __init__(self, arm, answer=None):
         self.steps = list(self.SCRIPT[arm])
+        self.answer = answer or {"component": "none", "cause": "no_fault", "evidence": [], "summary": "mock"}
 
     def turn(self, messages, tools, system):
         if self.steps:
             name, args = self.steps.pop(0)
             content = [Block(type="tool_use", id="mock_%s" % secrets.token_hex(4), name=name, input=args)]
         else:
-            content = [Block(type="tool_use", id="mock_submit", name="submit_answer",
-                             input={"component": "none", "cause": "no_fault", "evidence": [], "summary": "mock"})]
+            content = [Block(type="tool_use", id="mock_submit", name="submit_answer", input=dict(self.answer))]
         usage = {"input_tokens": sum(len(json.dumps(m, default=str)) for m in messages) // 4, "output_tokens": 30,
                  "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
         return content, "tool_use", usage
@@ -95,11 +95,33 @@ def grade(incident, answer, tool_outputs):
             "retrieved": retrieved, "submitted": True}
 
 
-def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None):
+def task_spec(incident_id):
+    """Everything suite-specific about one task: truth, prompt, submit tool, grader."""
+    if incident_id.startswith("rcaeval:"):
+        from . import rcaeval
+        return rcaeval.task(incident_id)
     inc = ALL[incident_id]
-    tools = ARM_TOOLS[arm] + [SUBMIT]
-    system = SYSTEM.format(turns=MAX_TURNS)
-    messages = [{"role": "user", "content": "Investigate the last 60 minutes and submit your diagnosis."}]
+    return {"truth": inc["truth"], "evidence": inc["evidence"], "system": SYSTEM, "submit": SUBMIT,
+            "user": "Investigate the last 60 minutes and submit your diagnosis.", "tool_text": {},
+            "grade": lambda t, a, o: grade(inc, a, o), "held_out": incident_id.startswith("ho-"),
+            "mock_answer": None}
+
+
+def arm_tools(arm, tool_text):
+    out = []
+    for t in ARM_TOOLS[arm]:
+        t = dict(t)
+        if t["name"] in tool_text or arm in tool_text and t["name"] == "query":
+            t["description"] = tool_text.get(t["name"], tool_text.get(arm)).format(cap=OUTPUT_CAP)
+        out.append(t)
+    return out
+
+
+def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None):
+    spec = task_spec(incident_id)
+    tools = arm_tools(arm, spec["tool_text"]) + [spec["submit"]]
+    system = spec["system"].replace("{turns}", str(MAX_TURNS))
+    messages = [{"role": "user", "content": spec["user"]}]
     trace_id, root = secrets.token_hex(16), secrets.token_hex(8)
     spans, outputs, calls, texts = [], [], [], []
     totals = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
@@ -156,7 +178,7 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None):
         if answer is not None:
             break
     wall = (time.time() - t_start) * 1000
-    g = grade(inc, answer, outputs)
+    g = spec["grade"](spec, answer, outputs)
     usd = cost_usd(model.name, totals)
     spans.insert(0, _span(trace_id, None, "invoke_agent agentlab", t_start, wall,
                           {"gen_ai.operation.name": "invoke_agent", "agentlab.incident": incident_id,
@@ -172,7 +194,7 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None):
         "operations": len(calls), "bytes": sum(c["chars"] for c in calls), "error": error, "cleanup_error": None,
         "started_ms": t_start * 1000, "parallel": False,
         "detail": {"arm": arm, "model": model.name, "backend": backend.name, "answer": answer, "grade": g,
-                   "truth": inc["truth"], "held_out": incident_id.startswith("ho-"), "turns": len(spans) - 1 - len(calls),
+                   "truth": spec["truth"], "held_out": spec["held_out"], "turns": len(spans) - 1 - len(calls),
                    "tokens": totals, "usd": usd, "model_ms": model_ms, "tool_ms": tool_ms, "calls": calls,
                    "stop_reason": stop, "assistant_text": texts,
                    "wandered": any(c["wandered"] for c in calls)},

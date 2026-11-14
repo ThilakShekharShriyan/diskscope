@@ -24,6 +24,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _ids(arg):
+    if arg == "rcaeval":
+        from . import rcaeval
+        return ["rcaeval:" + c["case"] for c in rcaeval.load_subset()]
     if arg in (None, "all"):
         return [i["id"] for i in incidents.INCIDENTS + incidents.HELD_OUT]
     if arg == "main":
@@ -31,7 +34,7 @@ def _ids(arg):
     if arg == "held-out":
         return [i["id"] for i in incidents.HELD_OUT]
     ids = arg.split(",")
-    bad = [i for i in ids if i not in incidents.ALL]
+    bad = [i for i in ids if i not in incidents.ALL and not i.startswith("rcaeval:")]
     if bad:
         sys.exit("unknown incidents: %s" % bad)
     return ids
@@ -109,7 +112,8 @@ def cmd_run(a):
         if not hasattr(local, "backend"):  # one backend (one kept-alive Archil connection) per worker
             local.backend = make_backend()
         i, arm, t = job
-        model = harness.MockModel(arm) if not live else harness.LiveModel(a.model, a.effort)
+        model = (harness.MockModel(arm, harness.task_spec(i)["mock_answer"]) if not live
+                 else harness.LiveModel(a.model, a.effort))
         o = harness.run_one(i, arm, model, local.backend, trial=t, trace_dir=trace_dir)
         o["parallel"] = a.parallel > 1
         with lock:

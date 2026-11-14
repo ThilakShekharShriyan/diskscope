@@ -85,14 +85,14 @@ def convert(case_dir):
     for row in m.itertuples(index=False):
         ts = int(row[0]) * 1000
         for c, v in zip(cols, row[1:]):
-            if v is not None and v == v:  # skip null / NaN
+            if not pd.isna(v):
                 metrics.append({"ts_ms": ts, "series": c, "value": round(float(v), 6)})
     logs = []
     lp = os.path.join(case_dir, "logs.parquet")
     if os.path.exists(lp):
         lg = pd.read_parquet(lp)
         for ts, comp, msg in zip(lg["timestamp"], lg["container_name"], lg["message"]):
-            msg = "" if msg is None or msg != msg else str(msg)
+            msg = "" if pd.isna(msg) else str(msg)
             logs.append({"ts_ms": int(ts) * 1000, "level": _level(msg), "component": str(comp),
                          "msg": msg, "trace_id": None, "attrs": {}})
         logs.sort(key=lambda r: r["ts_ms"])
@@ -101,9 +101,8 @@ def convert(case_dir):
     if os.path.exists(tp):
         t = pd.read_parquet(tp)
         for r in t.itertuples(index=False):
-            parent = r.parentSpanID if isinstance(r.parentSpanID, str) and r.parentSpanID else None
-            code = r.statusCode
-            code = None if code is None or code != code else int(code)
+            parent = None if pd.isna(r.parentSpanID) or r.parentSpanID == "" else str(r.parentSpanID)
+            code = None if pd.isna(r.statusCode) else int(r.statusCode)
             spans.append({"trace_id": r.traceID, "span_id": r.spanID, "parent_id": parent,
                           "name": str(r.operationName), "component": str(r.serviceName),
                           "start_ms": float(r.startTimeMillis), "dur_ms": float(r.duration) / 1000.0,
@@ -129,3 +128,79 @@ All timestamps are Unix epoch milliseconds (UTC). The window is about 24 minutes
                diskio, socket, workload, error, latency-50, latency-90)
 - telemetry.db SQLite with tables logs, spans, metrics (same columns; attrs as JSON text)
 """
+
+
+# ---- agent task definition (used by harness.run_one for ids "rcaeval:<case>") ----
+OB_SERVICES = ["adservice", "cartservice", "checkoutservice", "currencyservice", "emailservice", "frontend",
+               "frontend-external", "paymentservice", "productcatalogservice", "recommendationservice",
+               "redis", "shippingservice"]
+
+SYSTEM = """You are the on-call engineer for Online Boutique, a microservice web shop (services: \
+{services}). You have about 24 minutes of its telemetry: per-service metrics at 1 s, logs and traces.
+
+A fault was injected into exactly one service during this window. Find the root-cause service (not \
+just the services showing symptoms) and the fault type. Use the tools to investigate, then call \
+submit_answer exactly once with up to 5 services, most likely first. You have at most {turns} turns.
+
+Fault types:
+- cpu: CPU stress on the service's container
+- mem: memory stress
+- disk: disk I/O stress
+- delay: added network latency
+- loss: network packet loss
+- socket: socket exhaustion"""
+
+USER = "Investigate this telemetry window and submit your diagnosis."
+
+SUBMIT = {
+    "name": "submit_answer",
+    "description": "Submit your final diagnosis. Call exactly once, when you are done investigating.",
+    "input_schema": {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            "services": {"type": "array", "items": {"type": "string", "enum": OB_SERVICES},
+                         "description": "Up to 5 candidate root-cause services, most likely first."},
+            "fault": {"type": "string", "enum": FAULTS, "description": "Fault type."},
+            "evidence": {"type": "array", "items": {"type": "string"},
+                         "description": "Short quotes or ids from the telemetry that support the diagnosis."},
+            "summary": {"type": "string", "description": "One or two sentences."},
+        },
+        "required": ["services", "fault", "evidence", "summary"],
+    },
+    "strict": True,
+}
+
+TOOL_TEXT = {  # replaces the synthetic suite's wording in the arm tool descriptions
+    "sql": ("Run one read-only SQLite query over the telemetry and get CSV rows (truncated to {cap} chars). "
+            "Tables: logs(ts_ms, level, component, msg, trace_id, attrs), spans(trace_id, span_id, parent_id, "
+            "name, component, start_ms, dur_ms, status, attrs), metrics(ts_ms, series, value). Times are epoch ms. "
+            "Metrics are 1 s steps; series = <service>_<metric> (cpu, mem, diskio, socket, workload, error, "
+            "latency-50, latency-90). level is derived from message keywords."),
+    "get_digest": ("Get the ranked digest of this telemetry window: metric change points, log templates whose "
+                   "rate changed, rare events, totals."),
+}
+
+
+def _subset_by_case():
+    return {c["case"]: c for c in load_subset()}
+
+
+def task(incident_id):
+    c = _subset_by_case()[incident_id.split(":", 1)[1]]
+    return {"truth": {"components": [c["service"]], "cause": c["fault"]}, "evidence": [],
+            "system": SYSTEM.replace("{services}", ", ".join(OB_SERVICES)), "user": USER, "submit": SUBMIT,
+            "tool_text": TOOL_TEXT, "grade": grade, "held_out": False,
+            "mock_answer": {"services": ["frontend"], "fault": "cpu", "evidence": [], "summary": "mock"}}
+
+
+def grade(t, answer, tool_outputs):
+    if answer is None:
+        return {"correct": False, "component_ok": False, "cause_ok": False, "retrieved": None,
+                "submitted": False, "ac1": 0.0, "ac3": 0.0, "ac5": 0.0, "avg5": 0.0}
+    truth = t["truth"]["components"][0]
+    order = list(dict.fromkeys(answer.get("services") or []))[:5]
+    acs = {k: 1.0 if truth in order[:k] else 0.0 for k in range(1, 6)}
+    cause_ok = answer.get("fault") == t["truth"]["cause"]
+    return {"correct": acs[1] == 1.0 and cause_ok, "component_ok": acs[1] == 1.0, "cause_ok": cause_ok,
+            "retrieved": None, "submitted": True, "ac1": acs[1], "ac3": acs[3], "ac5": acs[5],
+            "avg5": sum(acs.values()) / 5}

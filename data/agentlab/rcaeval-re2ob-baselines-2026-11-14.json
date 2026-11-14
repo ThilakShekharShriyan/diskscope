@@ -1,0 +1,1276 @@
+{
+ "summary": {
+  "n": 30,
+  "digest_rank": {
+   "1": 0.7,
+   "3": 0.9,
+   "5": 0.9,
+   "avg5": 0.8533333333333335
+  },
+  "baro": {
+   "1": 0.13333333333333333,
+   "3": 0.8666666666666667,
+   "5": 0.9333333333333333,
+   "avg5": 0.7466666666666668
+  },
+  "avg5_by_fault": {
+   "cpu": {
+    "digest_rank": 1.0,
+    "baro": 0.64
+   },
+   "mem": {
+    "digest_rank": 1.0,
+    "baro": 0.8800000000000001
+   },
+   "disk": {
+    "digest_rank": 0.96,
+    "baro": 0.8
+   },
+   "delay": {
+    "digest_rank": 0.36,
+    "baro": 0.72
+   },
+   "loss": {
+    "digest_rank": 0.8400000000000001,
+    "baro": 0.8
+   },
+   "socket": {
+    "digest_rank": 0.96,
+    "baro": 0.64
+   }
+  }
+ },
+ "rows": [
+  {
+   "case": "re2ob_checkoutservice_cpu_1",
+   "service": "checkoutservice",
+   "fault": "cpu",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "checkoutservice",
+    "cartservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "8eb222be3cfa",
+   "baro_rank": [
+    "redis",
+    "checkoutservice",
+    "cartservice",
+    "currencyservice",
+    "emailservice",
+    "shippingservice",
+    "paymentservice",
+    "recommendationservice",
+    "frontend",
+    "adservice",
+    "frontend-external",
+    "productcatalogservice"
+   ],
+   "secs": 5.8
+  },
+  {
+   "case": "re2ob_checkoutservice_delay_1",
+   "service": "checkoutservice",
+   "fault": "delay",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "redis",
+    "checkoutservice",
+    "cartservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "1d2069ab51ac",
+   "baro_rank": [
+    "redis",
+    "emailservice",
+    "shippingservice",
+    "checkoutservice",
+    "paymentservice",
+    "cartservice",
+    "recommendationservice",
+    "frontend",
+    "productcatalogservice",
+    "currencyservice",
+    "adservice",
+    "frontend-external"
+   ],
+   "secs": 4.8
+  },
+  {
+   "case": "re2ob_checkoutservice_disk_3",
+   "service": "checkoutservice",
+   "fault": "disk",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "redis",
+    "checkoutservice",
+    "adservice",
+    "recommendationservice",
+    "cartservice"
+   ],
+   "digest_sha": "40b41d5bcdaf",
+   "baro_rank": [
+    "redis",
+    "checkoutservice",
+    "cartservice",
+    "emailservice",
+    "recommendationservice",
+    "adservice",
+    "shippingservice",
+    "currencyservice",
+    "productcatalogservice",
+    "paymentservice",
+    "frontend"
+   ],
+   "secs": 4.9
+  },
+  {
+   "case": "re2ob_checkoutservice_loss_3",
+   "service": "checkoutservice",
+   "fault": "loss",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-check",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "redis",
+    "checkoutservice",
+    "frontend",
+    "recommendationservice",
+    "cartservice"
+   ],
+   "digest_sha": "44267004f802",
+   "baro_rank": [
+    "redis",
+    "checkoutservice",
+    "paymentservice",
+    "emailservice",
+    "adservice",
+    "frontend",
+    "productcatalogservice",
+    "shippingservice",
+    "recommendationservice",
+    "currencyservice",
+    "cartservice",
+    "frontend-external"
+   ],
+   "secs": 4.8
+  },
+  {
+   "case": "re2ob_checkoutservice_mem_2",
+   "service": "checkoutservice",
+   "fault": "mem",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "checkoutservice",
+    "cartservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "5ca7c70339c7",
+   "baro_rank": [
+    "redis",
+    "checkoutservice",
+    "emailservice",
+    "paymentservice",
+    "shippingservice",
+    "cartservice",
+    "adservice",
+    "currencyservice",
+    "recommendationservice",
+    "productcatalogservice",
+    "frontend",
+    "frontend-external"
+   ],
+   "secs": 3.7
+  },
+  {
+   "case": "re2ob_checkoutservice_socket_3",
+   "service": "checkoutservice",
+   "fault": "socket",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "checkoutservice",
+    "cartservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "05d7b48b4bbb",
+   "baro_rank": [
+    "redis",
+    "checkoutservice",
+    "emailservice",
+    "shippingservice",
+    "recommendationservice",
+    "paymentservice",
+    "productcatalogservice",
+    "cartservice",
+    "adservice",
+    "currencyservice",
+    "frontend-external",
+    "frontend"
+   ],
+   "secs": 4.8
+  },
+  {
+   "case": "re2ob_currencyservice_cpu_1",
+   "service": "currencyservice",
+   "fault": "cpu",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "currencyservice",
+    "cartservice",
+    "checkoutservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "89eff9d3b3b8",
+   "baro_rank": [
+    "redis",
+    "cartservice",
+    "recommendationservice",
+    "checkoutservice",
+    "shippingservice",
+    "frontend",
+    "currencyservice",
+    "paymentservice",
+    "productcatalogservice",
+    "adservice",
+    "emailservice",
+    "frontend-external"
+   ],
+   "secs": 4.8
+  },
+  {
+   "case": "re2ob_currencyservice_delay_2",
+   "service": "currencyservice",
+   "fault": "delay",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "recommendationservice",
+    "cartservice",
+    "checkoutservice"
+   ],
+   "digest_sha": "8cd6330da924",
+   "baro_rank": [
+    "redis",
+    "currencyservice",
+    "frontend",
+    "checkoutservice",
+    "emailservice",
+    "paymentservice",
+    "recommendationservice",
+    "adservice",
+    "shippingservice",
+    "cartservice",
+    "productcatalogservice",
+    "frontend-external"
+   ],
+   "secs": 4.2
+  },
+  {
+   "case": "re2ob_currencyservice_disk_1",
+   "service": "currencyservice",
+   "fault": "disk",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "currencyservice",
+    "checkoutservice",
+    "frontend",
+    "cartservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "5b6381f0a0e8",
+   "baro_rank": [
+    "redis",
+    "currencyservice",
+    "paymentservice",
+    "recommendationservice",
+    "frontend",
+    "cartservice",
+    "checkoutservice",
+    "adservice",
+    "shippingservice",
+    "productcatalogservice",
+    "emailservice",
+    "frontend-external"
+   ],
+   "secs": 4.3
+  },
+  {
+   "case": "re2ob_currencyservice_loss_2",
+   "service": "currencyservice",
+   "fault": "loss",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "frontend",
+    "currencyservice",
+    "recommendationservice",
+    "cartservice",
+    "checkoutservice"
+   ],
+   "digest_sha": "4a6d020a3906",
+   "baro_rank": [
+    "redis",
+    "frontend",
+    "recommendationservice",
+    "currencyservice",
+    "checkoutservice",
+    "cartservice",
+    "paymentservice",
+    "adservice",
+    "productcatalogservice",
+    "emailservice",
+    "shippingservice",
+    "frontend-external"
+   ],
+   "secs": 4.1
+  },
+  {
+   "case": "re2ob_currencyservice_mem_1",
+   "service": "currencyservice",
+   "fault": "mem",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "currencyservice",
+    "frontend",
+    "cartservice",
+    "recommendationservice",
+    "checkoutservice"
+   ],
+   "digest_sha": "dbe01878cab4",
+   "baro_rank": [
+    "redis",
+    "currencyservice",
+    "recommendationservice",
+    "checkoutservice",
+    "frontend",
+    "cartservice",
+    "adservice",
+    "shippingservice",
+    "productcatalogservice",
+    "emailservice",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "secs": 4.5
+  },
+  {
+   "case": "re2ob_currencyservice_socket_2",
+   "service": "currencyservice",
+   "fault": "socket",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "currencyservice",
+    "cartservice",
+    "checkoutservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "99aed46fe739",
+   "baro_rank": [
+    "redis",
+    "cartservice",
+    "recommendationservice",
+    "checkoutservice",
+    "frontend",
+    "emailservice",
+    "currencyservice",
+    "adservice",
+    "productcatalogservice",
+    "shippingservice",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "secs": 4.7
+  },
+  {
+   "case": "re2ob_emailservice_cpu_3",
+   "service": "emailservice",
+   "fault": "cpu",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "emailservice",
+    "cartservice",
+    "checkoutservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "ef255ba30af8",
+   "baro_rank": [
+    "redis",
+    "emailservice",
+    "adservice",
+    "checkoutservice",
+    "cartservice",
+    "productcatalogservice",
+    "frontend",
+    "paymentservice",
+    "recommendationservice",
+    "currencyservice",
+    "shippingservice",
+    "frontend-external"
+   ],
+   "secs": 4.9
+  },
+  {
+   "case": "re2ob_emailservice_delay_1",
+   "service": "emailservice",
+   "fault": "delay",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "cartservice",
+    "recommendationservice",
+    "checkoutservice"
+   ],
+   "digest_sha": "a303a77ef1f9",
+   "baro_rank": [
+    "redis",
+    "emailservice",
+    "checkoutservice",
+    "productcatalogservice",
+    "frontend",
+    "paymentservice",
+    "currencyservice",
+    "shippingservice",
+    "cartservice",
+    "adservice",
+    "recommendationservice",
+    "frontend-external"
+   ],
+   "secs": 4.9
+  },
+  {
+   "case": "re2ob_emailservice_disk_1",
+   "service": "emailservice",
+   "fault": "disk",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "emailservice",
+    "recommendationservice",
+    "cartservice",
+    "checkoutservice"
+   ],
+   "digest_sha": "9cf4002da2b6",
+   "baro_rank": [
+    "redis",
+    "emailservice",
+    "cartservice",
+    "recommendationservice",
+    "shippingservice",
+    "currencyservice",
+    "adservice",
+    "productcatalogservice",
+    "checkoutservice",
+    "paymentservice",
+    "frontend-external",
+    "frontend"
+   ],
+   "secs": 4.6
+  },
+  {
+   "case": "re2ob_emailservice_loss_2",
+   "service": "emailservice",
+   "fault": "loss",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "emailservice",
+    "cartservice",
+    "checkoutservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "89bd2941f62c",
+   "baro_rank": [
+    "redis",
+    "emailservice",
+    "checkoutservice",
+    "cartservice",
+    "adservice",
+    "productcatalogservice",
+    "shippingservice",
+    "paymentservice",
+    "currencyservice",
+    "recommendationservice",
+    "frontend",
+    "frontend-external"
+   ],
+   "secs": 4.9
+  },
+  {
+   "case": "re2ob_emailservice_mem_3",
+   "service": "emailservice",
+   "fault": "mem",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "emailservice",
+    "checkoutservice",
+    "cartservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "b3270d127809",
+   "baro_rank": [
+    "emailservice",
+    "redis",
+    "checkoutservice",
+    "recommendationservice",
+    "shippingservice",
+    "adservice",
+    "frontend",
+    "productcatalogservice",
+    "frontend-external",
+    "currencyservice",
+    "cartservice",
+    "paymentservice"
+   ],
+   "secs": 4.8
+  },
+  {
+   "case": "re2ob_emailservice_socket_3",
+   "service": "emailservice",
+   "fault": "socket",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "emailservice",
+    "cartservice",
+    "checkoutservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "cdbacd9e8582",
+   "baro_rank": [
+    "redis",
+    "emailservice",
+    "recommendationservice",
+    "checkoutservice",
+    "cartservice",
+    "paymentservice",
+    "shippingservice",
+    "currencyservice",
+    "productcatalogservice",
+    "adservice",
+    "frontend-external",
+    "frontend"
+   ],
+   "secs": 4.9
+  },
+  {
+   "case": "re2ob_productcatalogservice_cpu_3",
+   "service": "productcatalogservice",
+   "fault": "cpu",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "productcatalogservice",
+    "cartservice",
+    "checkoutservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "c1fde09e3271",
+   "baro_rank": [
+    "redis",
+    "productcatalogservice",
+    "recommendationservice",
+    "cartservice",
+    "checkoutservice",
+    "frontend",
+    "adservice",
+    "paymentservice",
+    "shippingservice",
+    "emailservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "secs": 4.8
+  },
+  {
+   "case": "re2ob_productcatalogservice_delay_2",
+   "service": "productcatalogservice",
+   "fault": "delay",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "frontend",
+    "currencyservice",
+    "cartservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "a1cd1abbe4c1",
+   "baro_rank": [
+    "redis",
+    "productcatalogservice",
+    "recommendationservice",
+    "paymentservice",
+    "frontend",
+    "checkoutservice",
+    "emailservice",
+    "shippingservice",
+    "currencyservice",
+    "adservice",
+    "cartservice",
+    "frontend-external"
+   ],
+   "secs": 4.3
+  },
+  {
+   "case": "re2ob_productcatalogservice_disk_2",
+   "service": "productcatalogservice",
+   "fault": "disk",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "productcatalogservice",
+    "adservice",
+    "recommendationservice",
+    "cartservice",
+    "checkoutservice"
+   ],
+   "digest_sha": "f456f205d61c",
+   "baro_rank": [
+    "redis",
+    "productcatalogservice",
+    "cartservice",
+    "recommendationservice",
+    "adservice",
+    "checkoutservice",
+    "frontend",
+    "shippingservice",
+    "emailservice",
+    "paymentservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "secs": 4.7
+  },
+  {
+   "case": "re2ob_productcatalogservice_loss_3",
+   "service": "productcatalogservice",
+   "fault": "loss",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "recommendationservice",
+    "frontend",
+    "productcatalogservice",
+    "currencyservice",
+    "cartservice",
+    "checkoutservice"
+   ],
+   "digest_sha": "f600f0eb9b5f",
+   "baro_rank": [
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "cartservice",
+    "frontend",
+    "adservice",
+    "shippingservice",
+    "checkoutservice",
+    "emailservice",
+    "currencyservice",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "secs": 4.1
+  },
+  {
+   "case": "re2ob_productcatalogservice_mem_2",
+   "service": "productcatalogservice",
+   "fault": "mem",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "productcatalogservice",
+    "frontend",
+    "currencyservice",
+    "cartservice",
+    "checkoutservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "c0e422d450c7",
+   "baro_rank": [
+    "productcatalogservice",
+    "redis",
+    "recommendationservice",
+    "cartservice",
+    "checkoutservice",
+    "adservice",
+    "frontend",
+    "shippingservice",
+    "currencyservice",
+    "paymentservice",
+    "emailservice",
+    "frontend-external"
+   ],
+   "secs": 4.0
+  },
+  {
+   "case": "re2ob_productcatalogservice_socket_1",
+   "service": "productcatalogservice",
+   "fault": "socket",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "redis",
+    "productcatalogservice",
+    "cartservice",
+    "checkoutservice",
+    "recommendationservice"
+   ],
+   "digest_sha": "78f258a94af5",
+   "baro_rank": [
+    "redis",
+    "productcatalogservice",
+    "cartservice",
+    "recommendationservice",
+    "checkoutservice",
+    "frontend",
+    "paymentservice",
+    "emailservice",
+    "adservice",
+    "shippingservice",
+    "currencyservice",
+    "frontend-external"
+   ],
+   "secs": 4.6
+  },
+  {
+   "case": "re2ob_recommendationservice_cpu_1",
+   "service": "recommendationservice",
+   "fault": "cpu",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "recommendationservice",
+    "cartservice",
+    "checkoutservice"
+   ],
+   "digest_sha": "dbcd21723036",
+   "baro_rank": [
+    "redis",
+    "recommendationservice",
+    "cartservice",
+    "currencyservice",
+    "adservice",
+    "productcatalogservice",
+    "frontend",
+    "emailservice",
+    "checkoutservice",
+    "shippingservice",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "secs": 4.7
+  },
+  {
+   "case": "re2ob_recommendationservice_delay_2",
+   "service": "recommendationservice",
+   "fault": "delay",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "recommendationservice",
+    "checkoutservice",
+    "cartservice"
+   ],
+   "digest_sha": "7d3f7040f5f4",
+   "baro_rank": [
+    "redis",
+    "recommendationservice",
+    "frontend",
+    "productcatalogservice",
+    "checkoutservice",
+    "cartservice",
+    "adservice",
+    "shippingservice",
+    "currencyservice",
+    "emailservice",
+    "paymentservice",
+    "frontend-external"
+   ],
+   "secs": 4.8
+  },
+  {
+   "case": "re2ob_recommendationservice_disk_1",
+   "service": "recommendationservice",
+   "fault": "disk",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "recommendationservice",
+    "cartservice"
+   ],
+   "digest_sha": "389aaaba8cfa",
+   "baro_rank": [
+    "redis",
+    "recommendationservice",
+    "currencyservice",
+    "adservice",
+    "shippingservice",
+    "cartservice",
+    "productcatalogservice",
+    "frontend",
+    "emailservice",
+    "paymentservice",
+    "frontend-external",
+    "checkoutservice"
+   ],
+   "secs": 4.6
+  },
+  {
+   "case": "re2ob_recommendationservice_loss_3",
+   "service": "recommendationservice",
+   "fault": "loss",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "recommendationservice",
+    "frontend",
+    "paymentservice",
+    "cartservice",
+    "checkoutservice"
+   ],
+   "digest_sha": "56b896c8648c",
+   "baro_rank": [
+    "recommendationservice",
+    "redis",
+    "productcatalogservice",
+    "frontend",
+    "adservice",
+    "paymentservice",
+    "cartservice",
+    "shippingservice",
+    "currencyservice",
+    "emailservice",
+    "checkoutservice",
+    "frontend-external"
+   ],
+   "secs": 4.4
+  },
+  {
+   "case": "re2ob_recommendationservice_mem_3",
+   "service": "recommendationservice",
+   "fault": "mem",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "recommendationservice",
+    "redis",
+    "cartservice",
+    "checkoutservice"
+   ],
+   "digest_sha": "adb3fd53e190",
+   "baro_rank": [
+    "redis",
+    "recommendationservice",
+    "frontend",
+    "cartservice",
+    "productcatalogservice",
+    "checkoutservice",
+    "shippingservice",
+    "adservice",
+    "emailservice",
+    "paymentservice",
+    "frontend-external",
+    "currencyservice"
+   ],
+   "secs": 4.7
+  },
+  {
+   "case": "re2ob_recommendationservice_socket_3",
+   "service": "recommendationservice",
+   "fault": "socket",
+   "services": [
+    "adservice",
+    "cartservice",
+    "checkoutservice",
+    "currencyservice",
+    "emailservice",
+    "frontend",
+    "frontend-external",
+    "paymentservice",
+    "productcatalogservice",
+    "recommendationservice",
+    "redis",
+    "shippingservice"
+   ],
+   "digest_rank": [
+    "recommendationservice",
+    "checkoutservice",
+    "cartservice"
+   ],
+   "digest_sha": "bf6e29cb2859",
+   "baro_rank": [
+    "redis",
+    "recommendationservice",
+    "adservice",
+    "frontend",
+    "productcatalogservice",
+    "paymentservice",
+    "cartservice",
+    "shippingservice",
+    "emailservice",
+    "currencyservice",
+    "checkoutservice",
+    "frontend-external"
+   ],
+   "secs": 4.8
+  }
+ ]
+}
