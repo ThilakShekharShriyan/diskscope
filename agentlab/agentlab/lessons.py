@@ -32,11 +32,12 @@ BASES = ("sql", "digest")
 KINDS = ("lessons", "placebo")
 HEADING = "Lessons from earlier graded investigations"
 DISTILLER = "claude-opus-5-5"
-MAX_WORDS = 400
+MAX_WORDS = 400                # hard cap after filtering
+ASK_WORDS = 340                # what the distiller is asked for (margin under the cap)
 MAX_PROMPT_CHARS = 60_000      # graded-runs section per lessons prompt (~20k tokens)
-MAX_OUT_TOKENS = {"lessons": 8000, "placebo": 4000}
+MAX_OUT_TOKENS = {"lessons": 16000, "placebo": 8000}  # billed on actual tokens; room for adaptive thinking
 EFFORT = {"lessons": "medium", "placebo": "low"}
-EXPECTED_OUT_TOKENS = 3000     # for the pre-call spend projection (thinking bills as output)
+EXPECTED_OUT_TOKENS = {"lessons": 3000, "placebo": 1500}  # spend projection (thinking bills as output)
 
 # Names that must never reach an agent through a lessons file. Stems catch "checkout", "productcatalog" ...
 _STEMS = sorted({s.lower() for s in rcaeval.OB_SERVICES}
@@ -213,7 +214,7 @@ def _render_cases(cases, per_call):
     return "\n\n".join(parts)
 
 
-def lessons_prompt(base, runs, max_chars=MAX_PROMPT_CHARS, words=MAX_WORDS):
+def lessons_prompt(base, runs, max_chars=MAX_PROMPT_CHARS, words=ASK_WORDS):
     """Deterministic: same runs and budget -> byte-identical prompt. The per-call output clip is the
     largest (from a fixed ladder) that keeps the graded-runs section within max_chars."""
     cases = exemplars(runs)
@@ -246,18 +247,37 @@ def leaks(text, extra=()):
     return bad
 
 
+def _sections(lines):
+    """[[heading or None, bullet lines...], ...] in order."""
+    secs = [[None]]
+    for ln in lines:
+        if ln.lstrip().startswith("#"):
+            secs.append([ln])
+        elif ln.strip():
+            secs[-1].append(ln)
+    return [s for s in secs if s[0] is not None or len(s) > 1]
+
+
+def headings(text):
+    return [ln.lstrip("# ").strip() for ln in text.splitlines() if ln.lstrip().startswith("#")]
+
+
 def post_filter(text, max_words=MAX_WORDS):
-    """Drop leaking lines; then drop trailing bullets until <= max_words. Returns (text, dropped lines)."""
-    bad = set(leaks(text))
-    kept = [ln.rstrip() for ln in text.strip().splitlines() if ln not in bad]
-    dropped = [ln for ln in text.splitlines() if ln in bad]
-    while kept and words("\n".join(kept)) > max_words:
-        dropped.append(kept.pop())
-    kept = [ln for i, ln in enumerate(kept)  # drop headings left with no rules under them
-            if not ln.lstrip().startswith("#")
-            or any(x.strip() and not x.lstrip().startswith("#") for x in
-                   kept[i + 1:next((j for j in range(i + 1, len(kept)) if kept[j].lstrip().startswith("#")), len(kept))])]
-    out = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+    """Drop every line that leaks (tested line by line); then, while over max_words, drop the last
+    rule of the longest section, never emptying a section while another has spares; drop headings
+    left with no rules. Returns (text, dropped lines)."""
+    lines = [ln.rstrip() for ln in text.strip().splitlines()]
+    dropped = [ln for ln in lines if leaks(ln)]
+    secs = _sections([ln for ln in lines if not leaks(ln)])
+    while secs and words("\n".join(ln for s in secs for ln in s if ln)) > max_words:
+        rules = lambda s: len(s) - (1 if s[0] is not None else 0)  # noqa: E731
+        spare = [s for s in secs if rules(s) > 1] or [s for s in secs if rules(s) > 0]
+        if not spare:
+            break
+        longest = max(spare, key=lambda s: (words("\n".join(s[1:])), -secs.index(s)))
+        dropped.append(longest.pop())
+    secs = [s for s in secs if len(s) > 1]  # a heading with no rules under it goes too
+    out = "\n\n".join("\n".join(ln for ln in s if ln is not None) for s in secs).strip()
     return out + "\n", dropped
 
 
@@ -314,9 +334,9 @@ def make_distiller(model):
     return distill
 
 
-def _projected(model, prompt, spent):
+def _projected(model, prompt, spent, kind="lessons"):
     from .harness import cost_usd
-    return spent + (cost_usd(model, {"input_tokens": len(prompt) // 3, "output_tokens": EXPECTED_OUT_TOKENS,
+    return spent + (cost_usd(model, {"input_tokens": len(prompt) // 3, "output_tokens": EXPECTED_OUT_TOKENS[kind],
                                      "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}) or 0.0)
 
 
@@ -333,21 +353,23 @@ def build(run_paths, out_dir, model=DISTILLER, max_usd=2.0, variant="rcaeval", d
             if not tr:
                 raise SystemExit("no %s training runs for fold %s (variant %s)" % (base, fid, variant))
             plan.append((base, fid, held, tests, tr, lessons_prompt(base, tr, max_chars)))
+    # projected cost of the whole plan (placebo prompts are short; MAX_WORDS stands in for the target)
+    total = sum(_projected(model, x[5], 0.0) + _projected(model, placebo_prompt(x[0], MAX_WORDS), 0.0, "placebo")
+                for x in plan)
     if dry_run:
-        total = 0.0
         for base, fid, held, tests, tr, prompt in plan:
             log("=" * 30 + " %s %s (holds out %s; %d training runs) %d chars ~%d tokens" % (
                 base, fid, held, len(tr), len(prompt), len(prompt) // 3))
             log(prompt)
-            total = _projected(model, prompt, total)
         for base in bases:
-            pp = placebo_prompt(base, MAX_WORDS)
             log("=" * 30 + " placebo %s (one per fold; target = that fold's lessons word count)" % base)
-            log(pp)
-            total += sum(1 for x in plan if x[0] == base) * _projected(model, pp, 0.0)
+            log(placebo_prompt(base, MAX_WORDS))
         log("dry run: %d lessons + %d placebo calls to %s; projected ~$%.2f vs --max-usd %.2f" % (
             len(plan), len(plan), model, total, max_usd))
         return None
+    if total > max_usd:
+        raise SystemExit("projected ~$%.2f for the whole build exceeds --max-usd %.2f; nothing called "
+                         "(lower --max-prompt-chars or raise the cap)" % (total, max_usd))
     if os.path.exists(os.path.join(out_dir, "manifest.json")):
         raise SystemExit("%s already has a manifest; lessons are frozen once written (use a new dir)" % out_dir)
     distill = distill or make_distiller(model)
@@ -356,7 +378,7 @@ def build(run_paths, out_dir, model=DISTILLER, max_usd=2.0, variant="rcaeval", d
 
     def call(prompt, kind):
         nonlocal spent
-        if _projected(model, prompt, spent) > max_usd:
+        if _projected(model, prompt, spent, kind) > max_usd:
             raise SystemExit("stopping: next %s call would pass --max-usd %.2f (spent $%.2f)" % (kind, max_usd, spent))
         text, usage = distill(prompt, kind)
         usd = cost_usd(model, usage) or 0.0
@@ -372,18 +394,21 @@ def build(run_paths, out_dir, model=DISTILLER, max_usd=2.0, variant="rcaeval", d
         praw, pusage, pusd = call(pprompt, "placebo")
         ptext, pdropped = post_filter(praw, n)
         entries.append(("placebo", ptext, pdropped, pprompt, pusage, pusd, words(ptext), n))
+        shown = [[o["task"], o["detail"]["model"], o.get("trial", 0)] for _, _, sh in exemplars(tr) for o in sh]
         for kind, body, drop, pr, us, cost, nw, target in entries:
+            if leaks(body):
+                raise SystemExit("post-filter let a leaking line through in %s %s %s" % (base, fid, kind))
             name = "%s-%s-%s.md" % (base, fid, kind)
             with open(os.path.join(out_dir, name), "w") as f:
                 f.write(body)
             files.append({"file": name, "base": base, "kind": kind, "fold": fid, "held_out": held,
                           "test_cases": tests, "sha256": sha256(body), "words": nw, "target_words": target,
-                          "dropped_lines": len(drop), "dropped": drop, "prompt_sha256": sha256(pr),
+                          "dropped_lines": len(drop), "dropped": drop, "headings": headings(body), "prompt_sha256": sha256(pr),
                           "prompt_chars": len(pr), "usage": us, "usd": round(cost, 4),
                           "training_runs": [[o["task"], o["detail"]["model"], o.get("trial", 0)] for o in tr]
-                          if kind == "lessons" else []})
+                          if kind == "lessons" else [], "exemplar_runs": shown if kind == "lessons" else []})
             log("%s: %d words, %d lines dropped, $%.3f" % (name, nw, len(drop), cost))
-    man = {"schema_version": 1, "distiller": model, "variant": variant, "max_words": MAX_WORDS,
+    man = {"schema_version": 1, "distiller": model, "variant": variant, "max_words": MAX_WORDS, "ask_words": ASK_WORDS,
            "max_prompt_chars": max_chars, "spent_usd": round(spent, 4),
            "inputs": [{"path": os.path.basename(p), "sha256": sha256(_read(p))}
                       for p in run_paths],

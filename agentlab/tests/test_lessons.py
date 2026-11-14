@@ -98,6 +98,22 @@ class FilterTest(unittest.TestCase):
         self.assertLessEqual(lessons.words(short), 25)
         self.assertFalse(short.strip().splitlines()[-1].startswith("#"))
 
+    def test_whitespace_around_a_leaking_line_does_not_save_it(self):
+        for raw in ["## cpu\n- ok rule\n- redis mem   ", "   - checkout cpu\n## cpu\n- ok rule\n"]:
+            text, dropped = lessons.post_filter(raw, 400)
+            self.assertEqual(lessons.leaks(text), [], raw)
+            self.assertEqual(len(dropped), 1, raw)
+
+    def test_word_cap_keeps_every_fault_heading(self):
+        faults = ["cpu", "mem", "disk", "delay", "loss", "socket"]
+        raw = "\n".join("## %s\n%s" % (f, "\n".join("- %s rule %d: %s" % (f, i, "word " * (30 if f == "cpu" else 8))
+                                                     for i in range(4))) for f in faults)
+        text, dropped = lessons.post_filter(raw, 150)
+        self.assertLessEqual(lessons.words(text), 150)
+        self.assertEqual(lessons.headings(text), faults)
+        self.assertTrue(dropped)
+        self.assertTrue(all(x.startswith("- cpu") for x in dropped[:3]))  # longest section trimmed first
+
     def test_prompts_do_not_name_confusion_pairs(self):
         p = lessons.placebo_prompt("digest", 300) + lessons.LESSONS_INTRO + lessons.RULES
         for a, b in [("disk", "mem"), ("loss", "delay"), ("socket", "cpu")]:
@@ -127,6 +143,8 @@ class BuildTest(unittest.TestCase):
                 self.assertLessEqual(e["words"], e["target_words"])
             else:  # the held-out service's runs never reach its fold's distiller prompt
                 self.assertTrue(all(e["held_out"] not in t for t, _, _ in e["training_runs"]))
+                self.assertTrue(e["exemplar_runs"])
+                self.assertEqual(e["headings"], ["cpu", "mem", "delay"])
 
     def test_lessons_prompt_has_no_held_out_cases_and_placebo_no_transcripts(self):
         lp = [p for k, p in self.calls if k == "lessons"]
