@@ -282,7 +282,7 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None, meter=Non
                 continue
             t1 = time.time()
             try:
-                out, meta = backend.call(incident_id, arm, b.name, dict(b.input))
+                out, meta = backend.call(spec.get("layout_id", incident_id), arm, b.name, dict(b.input))
             except InfraError as e:
                 error, infra = "infra: %s" % e, True
                 break

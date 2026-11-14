@@ -33,3 +33,19 @@ class RcaevalTaskTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VariantLayoutTest(unittest.TestCase):
+    """Every task variant must read an existing layout (regression: rcaeval+t hashed its own id)."""
+
+    def test_variants_share_layout_id(self):
+        case = rcaeval.load_subset()[0]["case"]
+        ids = {harness.task_spec(v + ":" + case).get("layout_id") for v in ("rcaeval",)}
+        self.assertEqual(ids, {"rcaeval:" + case})
+        import os
+        if os.path.exists(rcaeval.os.path.join(rcaeval.HERE, "..", "..", "data-ext", "rcaeval", case, "metrics.parquet")):
+            try:
+                import pandas, pyarrow  # noqa: F401,E401
+            except ImportError:
+                return
+            self.assertEqual(harness.task_spec("rcaeval+t:" + case)["layout_id"], "rcaeval:" + case)

@@ -203,6 +203,7 @@ def task(incident_id):
         user = ("The fault was injected at %d ms epoch (+%dm%02ds from the start of the telemetry). "
                 % (inj * 1000, off // 60, off % 60)) + USER
     return {"truth": {"components": [c["service"]], "cause": c["fault"]}, "evidence": [], "variant": variant,
+            "layout_id": "rcaeval:" + case,  # every variant reads the same prepared telemetry
             "system": SYSTEM.replace("{services}", ", ".join(OB_SERVICES)), "user": user, "submit": SUBMIT,
             "tool_text": TOOL_TEXT, "grade": grade, "held_out": False,
             "mock_answer": {"services": ["frontend"], "fault": "cpu", "evidence": [], "summary": "mock"}}
