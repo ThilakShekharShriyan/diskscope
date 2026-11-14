@@ -19,7 +19,7 @@ from . import harness, tools
 def main(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("run")
-    p.add_argument("--backend", choices=["local", "archil"], default="local")
+    p.add_argument("--backend", choices=["local", "archil", "grafana"], default="local")
     p.add_argument("--root")
     p.add_argument("--prefix")
     p.add_argument("--lessons-dir")
@@ -44,6 +44,9 @@ def main(argv=None):
         if not hasattr(local, "b"):
             if a.backend == "local":
                 local.b = tools.LocalBackend(a.root)
+            elif a.backend == "grafana":
+                from . import dashboards
+                local.b = dashboards.GrafanaBackend(fallback=tools.LocalBackend(a.root) if a.root else None)
             else:
                 from .archil import Archil
                 local.b = tools.ArchilBackend(Archil(max_calls=len(bad) * (harness.MAX_TOOL_CALLS + 2) * a.attempts), a.prefix)
