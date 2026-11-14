@@ -13,6 +13,8 @@ Research write-up and plan: the shared doc *Observability for Agents, Not Eyebal
 | `files` | `shell` in a fresh Archil microVM over JSONL and CSV files | built |
 | `sql` | one read-only SQLite `query` tool | built (DuckDB and Parquet are not in the exec image) |
 | `digest` | a ranked digest (`get_digest`) plus `drill(id)` for raw evidence | built |
+| `sql+lessons`, `digest+lessons` | the base arm plus a lessons file appended to the system prompt, distilled by one fixed model from graded training-fold runs (leave-one-service-out over RE2-OB) | built (`agentlab/lessons.py`) |
+| `sql+placebo`, `digest+placebo` | control: same length, written by the same model from only the fault list and the tool schema | built |
 
 Every arm gets the same output cap (8,000 characters per tool result), the same turn cap (20) and input-token cap, and must finish with `submit_answer(component, cause, evidence, summary)`. Grading is deterministic, with no LLM judge.
 
@@ -42,3 +44,15 @@ python3 -m agentlab run --backend archil --prefix agentlab/<build> --model claud
 ```
 
 A live model can only use `shell` through Archil, never on this machine. The local backend's shell is enabled only for the scripted mock model.
+
+## Lessons arms (RCAEval only)
+
+```sh
+# 1. distil per (base arm, fold) lessons + placebo from graded runs; --dry-run prints the prompts and projected cost
+python3 -m agentlab lessons build --runs ../results/step1/*-notime.json --out-dir lessons/ --max-usd 2 [--dry-run]
+python3 -m agentlab lessons check --dir lessons/      # sha256 vs manifest + service-name/case-id grep
+# 2. commit lessons/ (live runs refuse an uncommitted lessons dir), then run
+python3 -m agentlab run ... --arms sql+lessons,sql+placebo,digest+lessons,digest+placebo --incidents rcaeval
+```
+
+Each test case gets the file built without its own service's runs; `detail.lessons_sha` records which.
