@@ -11,3 +11,5 @@
 bench/sandbox/node_modules/
 /diskscope-branchlab-phase2/
 /diskscope-branchlab-phase2.zip
+/results/agentlab-traces-*/
+__pycache__/

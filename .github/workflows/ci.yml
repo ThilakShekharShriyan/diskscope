@@ -37,3 +37,9 @@ jobs:
           cargo test --manifest-path branchlab/Cargo.toml
           cargo run --release --manifest-path branchlab/Cargo.toml -- local --runs 1 --size-kib 4 --fanout 2 --output results/state-local-ci.json
           python3 branchlab/report.py results/state-local-ci.json --output /tmp/branchlab.html
+      - name: AgentLab tests (mock model, local backend; no network)
+        working-directory: agentlab
+        run: |
+          python3 -m unittest discover -s tests -v
+          python3 -m agentlab prepare --root /tmp/agentlab --incidents erofs-a,quiet-plain
+          python3 -m agentlab run --root /tmp/agentlab --incidents erofs-a,quiet-plain --out /tmp/agentlab-ci.json
