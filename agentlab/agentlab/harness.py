@@ -64,6 +64,7 @@ class MockModel:
               "sql": [("query", {"sql": "SELECT component, level, count(*) n FROM logs GROUP BY 1,2 ORDER BY n DESC LIMIT 10"}),
                       ("query", {"sql": "SELECT msg FROM logs WHERE level='ERROR' LIMIT 5"})],
               "digest": [("get_digest", {}), ("drill", {"id": "M1"})]}
+    SCRIPT["digest-decoy"] = SCRIPT["digest-placebo"] = SCRIPT["digest"]
 
     def __init__(self, arm, answer=None):
         self.steps = list(self.SCRIPT[arm])
@@ -197,6 +198,9 @@ def task_spec(incident_id):
     if incident_id.startswith(("rcaeval:", "rcaeval+t:")):
         from . import rcaeval
         return rcaeval.task(incident_id)
+    if incident_id.startswith(("rcaevalm:", "rcaevalq:")):  # mixed suite with healthy controls
+        from . import rcaeval_controls
+        return rcaeval_controls.task(incident_id)
     inc = ALL[incident_id]
     return {"truth": inc["truth"], "evidence": inc["evidence"], "system": SYSTEM, "submit": SUBMIT,
             "user": "Investigate the last 60 minutes and submit your diagnosis.", "tool_text": {},
@@ -324,8 +328,16 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None, meter=Non
                    "served_by": sorted({t["served_by"] for t in turns_log}),
                    "model_mismatch": any(not str(t["served_by"]).startswith(model.name) for t in turns_log),
                    "stop_reason": stop, "assistant_text": texts,
-                   "wandered": any(c["wandered"] for c in calls)},
+                   "wandered": any(c["wandered"] for c in calls), "decoy": _decoy(incident_id, arm)},
     }
+
+
+def _decoy(incident_id, arm):
+    """Which innocent service the digest-decoy/-placebo line named for this task (None for other arms)."""
+    if not arm.startswith("digest-"):
+        return None
+    from . import rcaeval_controls
+    return rcaeval_controls.decoy_for(incident_id)
 
 
 def _wandered(arm, args):

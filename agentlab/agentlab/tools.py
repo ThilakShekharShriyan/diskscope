@@ -21,6 +21,10 @@ from .prepare import DEFAULT_SALT, opaque
 OUTPUT_CAP = 8000
 ARMS = ["files", "sql", "digest", "prior"]  # implemented; prior = no telemetry tools (control)
 PLANNED_ARMS = ["visual", "mcp"]           # need docker (Prometheus, Loki, Grafana)
+# Controls: the digest arm's tools over a digest with one inserted line (agentlab/digest_decoy.py);
+# their layouts exist only where rcaeval_controls prepared them
+CONTROL_ARMS = ["digest-decoy", "digest-placebo"]
+DIGEST_ARMS = ("digest",) + tuple(CONTROL_ARMS)
 
 SUBMIT = {
     "name": "submit_answer",
@@ -72,6 +76,8 @@ ARM_TOOLS = {
                           "properties": {"id": {"type": "string"}}, "required": ["id"]},
          "strict": True}],
 }
+for _a in CONTROL_ARMS:
+    ARM_TOOLS[_a] = ARM_TOOLS["digest"]
 
 SYSTEM = """You are the on-call engineer for an agent platform. Every agent tool call runs as a \
 fresh microVM over a shared network disk; components are gateway, scheduler, exec-pool, fs, store, \
@@ -170,11 +176,11 @@ class LocalBackend:
                                             if "interrupted" in str(e) else e)
             finally:
                 db.close()
-        elif arm == "digest" and tool == "get_digest":
-            with open(os.path.join(d("digest"), "digest.txt")) as f:
+        elif arm in DIGEST_ARMS and tool == "get_digest":
+            with open(os.path.join(d(arm), "digest.txt")) as f:
                 out = f.read()
-        elif arm == "digest" and tool == "drill":
-            with open(os.path.join(d("digest"), "index.json")) as f:
+        elif arm in DIGEST_ARMS and tool == "drill":
+            with open(os.path.join(d(arm), "index.json")) as f:
                 index = json.load(f)
             out = index.get(args["id"].strip().upper(), "unknown id %r; valid ids: %s" % (args["id"], ", ".join(index)))
         else:
@@ -206,13 +212,13 @@ class ArchilBackend:
             # output trimmed before transfer, same CSV dialect and byte limit as LocalBackend
             cmd = "timeout %d sqlite3 -readonly -safe -csv -header %s %s 2>&1 | head -c %d" % (
                 _SQL_TIMEOUT_S, shlex.quote(d("sql") + "/telemetry.db"), shlex.quote(args["sql"]), _SQL_MAX_BYTES)
-        elif arm == "digest" and tool == "get_digest":
-            cmd = "cat %s" % shlex.quote(d("digest") + "/digest.txt")
-        elif arm == "digest" and tool == "drill":
+        elif arm in DIGEST_ARMS and tool == "get_digest":
+            cmd = "cat %s" % shlex.quote(d(arm) + "/digest.txt")
+        elif arm in DIGEST_ARMS and tool == "drill":
             k = args["id"].strip().upper()
             if not _ID_RX.match(k):
                 return "unknown id %r; ids look like M1, L2, E1" % args["id"], {"tool_ms": 0}
-            cmd = "cat %s 2>/dev/null || echo %s" % (shlex.quote("%s/drill/%s.txt" % (d("digest"), k)),
+            cmd = "cat %s 2>/dev/null || echo %s" % (shlex.quote("%s/drill/%s.txt" % (d(arm), k)),
                                                      shlex.quote("unknown id %r" % k))
         else:
             return "error: unknown tool %s for arm %s" % (tool, arm), {"tool_ms": 0}

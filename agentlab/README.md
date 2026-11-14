@@ -41,4 +41,15 @@ python3 -m agentlab run --backend archil --prefix agentlab/<build> --incidents e
 python3 -m agentlab run --backend archil --prefix agentlab/<build> --model claude-opus-5-5 --live --max-usd 5
 ```
 
+## Controls on RCAEval (`agentlab/rcaeval_controls.py`, `agentlab/digest_decoy.py`)
+
+- **Healthy windows, mixed suite** (`--incidents rcaevalmix`): 30 real faults (`rcaevalm:<case>`) plus 6 seeded healthy windows (`rcaevalq:<case>`, 17%). A healthy window is the first 11 min of a case, ending 60 s before the injection. Every task offers `no_fault`, and real and healthy tasks share the same prompt, schema, README and 11-min window length: the real windows are cropped to 11 min with the injection at a seeded 210-450 s, which also removes RE2's midpoint leak. Accuracy on `+mix` is therefore not comparable to the 24-min suite; compare arms within it. `--incidents rcaevalq` gives all 30 healthy windows.
+- **Digest decoy / placebo** (arms `digest-decoy`, `digest-placebo`): the frozen digest's output with one line inserted as M1 about an innocent service's metric. In the decoy the change is fabricated; in the placebo the numbers are honest. `drill(M1)` returns the series' real (flat) per-minute values in both. The decoy service per task is in `agentlab/rcaeval_decoys.json` and in each run's `detail.decoy`.
+- The report adds the false-positive rate on healthy windows, the false-negative rate on real `+mix` tasks, and decoy capture (decoy service named first, or in the top 5, with the plain digest as the base rate).
+
+```sh
+python -m agentlab.rcaeval_controls --data ../data-ext/rcaeval --root ../data-ext/al-rcaeval-controls
+python3 -m agentlab run --root ../data-ext/al-rcaeval-controls --incidents rcaevalmix --arms sql,digest,digest-decoy,digest-placebo
+```
+
 A live model can only use `shell` through Archil, never on this machine. The local backend's shell is enabled only for the scripted mock model.
