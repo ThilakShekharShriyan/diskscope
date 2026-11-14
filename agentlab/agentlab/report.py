@@ -329,33 +329,58 @@ def summarize(runs):
     models = sorted({r["model"] for r in runs})
     arms = sorted({r["arm"] for r in runs})
     for m in models:
-        for i, a in enumerate(arms):
-            for b in arms[i + 1:]:
-                ra = [r for r in runs if r["model"] == m and r["arm"] == a]
-                rb = [r for r in runs if r["model"] == m and r["arm"] == b]
-                if ra and rb:
-                    comps.append({"model": m, "a": a, "b": b,
-                                  "ac1": paired(ra, rb, "ac1"), "fault_ok": paired(ra, rb, "fault_ok"),
-                                  "correct": paired(ra, rb, "correct"), "usd": paired(ra, rb, "usd"),
-                                  "in_tok": paired(ra, rb, "in_tok"), "mcnemar_correct": mcnemar(ra, rb, "correct")})
+        for a, b, fam in comparison_plan(arms):
+            ra = [r for r in runs if r["model"] == m and r["arm"] == a]
+            rb = [r for r in runs if r["model"] == m and r["arm"] == b]
+            if ra and rb:
+                comps.append({"model": m, "a": a, "b": b, "family": fam,
+                              "ac1": paired(ra, rb, "ac1"), "fault_ok": paired(ra, rb, "fault_ok"),
+                              "correct": paired(ra, rb, "correct"), "usd": paired(ra, rb, "usd"),
+                              "in_tok": paired(ra, rb, "in_tok"), "mcnemar_correct": mcnemar(ra, rb, "correct")})
     for a in arms:
         for i, m1 in enumerate(models):
             for m2 in models[i + 1:]:
                 ra = [r for r in runs if r["model"] == m1 and r["arm"] == a]
                 rb = [r for r in runs if r["model"] == m2 and r["arm"] == a]
                 if ra and rb:
-                    comps.append({"arm": a, "a": m1, "b": m2, "correct": paired(ra, rb, "correct"),
+                    comps.append({"arm": a, "a": m1, "b": m2, "family": "models", "correct": paired(ra, rb, "correct"),
                                   "usd": paired(ra, rb, "usd"), "mcnemar_correct": mcnemar(ra, rb, "correct")})
     holm(comps)
     return out, comps
 
 
+def comparison_plan(arms):
+    """The comparisons we test, fixed in advance by arm-name pattern, each in a family:
+    interface - every pair of plain interfaces (no suffix), incl. the no-telemetry prior
+    interface+time - every pair of interfaces given the injection time (rcatools always is)
+    lessons   - X+lessons vs X+placebo (the test) and vs X (total effect)
+    time      - X vs X+time (giving the injection time)
+    controls  - digest vs digest-decoy / digest-placebo; decoy vs placebo
+    Everything else (e.g. sql+placebo vs digest) is not tested."""
+    plain = sorted(a for a in arms if "+" not in a and not a.startswith("digest-"))
+    out = [(a, b, "interface") for i, a in enumerate(plain) for b in plain[i + 1:]]
+    timed = sorted(a for a in arms if a.endswith("+time") and "+" not in a[: -len("+time")] and not a.startswith("digest-"))
+    out += [(a, b, "interface+time") for i, a in enumerate(timed) for b in timed[i + 1:]]  # e.g. rcatools+time
+    for a in arms:
+        if a.endswith("+lessons"):
+            base = a[: -len("+lessons")]
+            out += [(a, base + "+placebo", "lessons"), (a, base, "lessons")]
+        if a.endswith("+time") and a[: -len("+time")] in arms:
+            out.append((a[: -len("+time")], a, "time"))
+    for ctl in ("digest-decoy", "digest-placebo"):
+        for suf in ("", "+mix", "+time"):
+            if ctl + suf in arms and "digest" + suf in arms:
+                out.append(("digest" + suf, ctl + suf, "controls"))
+        if "digest-decoy" in arms and "digest-placebo" in arms and ctl == "digest-decoy":
+            out.append(("digest-decoy", "digest-placebo", "controls"))
+    return [(a, b, f) for a, b, f in out if a in arms and b in arms]
+
+
 def holm(comps):
-    """Holm-adjusted McNemar p-values, within each family (one model's arm pairs, or one arm's model pair)."""
+    """Holm-adjusted McNemar p-values within each family (per model x comparison family, or per arm for models)."""
     fams = {}
     for c in comps:
-        ctl = any(_is_control(x) for x in (c["a"], c["b"], c.get("arm", "")))
-        fams.setdefault((c.get("model") or ("arm:" + c["arm"])) + (":controls" if ctl else ""), []).append(c)
+        fams.setdefault((c.get("model") or ("arm:" + c["arm"]), c.get("family", "")), []).append(c)
     for fam in fams.values():
         order = sorted(fam, key=lambda c: c["mcnemar_correct"]["p"])
         m, run = len(order), 0.0
@@ -399,7 +424,8 @@ def markdown(summary, comps, baselines):
             "%s AC@1 %s, Avg@5 %s" % (k, pct(v["1"]), pct(v["avg5"])) for k, v in baselines.items())]
     L += ["", "Paired differences (per case, mean of trials; 95% paired bootstrap):", ""]
     for c in comps:
-        who = ("%s: %s − %s" % (c["model"], c["a"], c["b"])) if "model" in c else ("%s: %s − %s" % (c["arm"], c["a"], c["b"]))
+        who = (("[%s] " % c.get("family", "")) + (("%s: %s − %s" % (c["model"], c["a"], c["b"])) if "model" in c
+                                                  else ("%s: %s − %s" % (c["arm"], c["a"], c["b"]))))
         parts = []
         for k in ("correct", "fault_ok", "usd"):
             v = c.get(k)
