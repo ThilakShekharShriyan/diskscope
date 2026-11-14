@@ -1,0 +1,5 @@
+# No scraping: every series is backfilled from incident telemetry (promtool), so the
+# metric list an agent sees holds incident data only.
+global:
+  scrape_interval: 1h
+scrape_configs: []

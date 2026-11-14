@@ -63,7 +63,9 @@ class MockModel:
               "prior": [],
               "sql": [("query", {"sql": "SELECT component, level, count(*) n FROM logs GROUP BY 1,2 ORDER BY n DESC LIMIT 10"}),
                       ("query", {"sql": "SELECT msg FROM logs WHERE level='ERROR' LIMIT 5"})],
-              "digest": [("get_digest", {}), ("drill", {"id": "M1"})]}
+              "digest": [("get_digest", {}), ("drill", {"id": "M1"})],
+              "visual": [("get_dashboard", {}), ("render_panel", {"panel": 1, "service": "all", "from_min": 0, "to_min": 10})],
+              "mcp": [("list_datasources", {}), ("list_prometheus_metric_names", {"datasourceUid": "prom"})]}
 
     def __init__(self, arm, answer=None):
         self.steps = list(self.SCRIPT[arm])
@@ -113,7 +115,23 @@ class OpenAIModel:
     @staticmethod
     def _tools(tools):
         return [{"type": "function", "name": t["name"], "description": t["description"],
-                 "parameters": t["input_schema"], "strict": True} for t in tools]
+                 "parameters": t["input_schema"], "strict": t.get("strict", True)} for t in tools]
+
+    @staticmethod
+    def _output(content):
+        """Tool-result content -> function_call_output.output (text, or input_text/input_image parts)."""
+        if isinstance(content, str):
+            return content
+        if not any(isinstance(c, dict) and c.get("type") == "image" for c in content):
+            return json.dumps(content)
+        parts = []
+        for c in content:
+            if c.get("type") == "text":
+                parts.append({"type": "input_text", "text": c["text"]})
+            elif c.get("type") == "image":
+                parts.append({"type": "input_image", "image_url": "data:%s;base64,%s" % (
+                    c["source"]["media_type"], c["source"]["data"])})
+        return parts
 
     def _input(self, messages):
         items = []
@@ -125,7 +143,7 @@ class OpenAIModel:
             else:
                 for r in m["content"]:
                     items.append({"type": "function_call_output", "call_id": r["tool_use_id"],
-                                  "output": r["content"] if isinstance(r["content"], str) else json.dumps(r["content"])})
+                                  "output": self._output(r["content"])})
         return items
 
     def turn(self, messages, tools, system):
@@ -217,12 +235,15 @@ def arm_tools(arm, tool_text):
 
 def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None, meter=None):
     spec = task_spec(incident_id)
-    tools = arm_tools(arm, spec["tool_text"]) + [spec["submit"]]
+    backend_tools = getattr(backend, "arm_tools", None)  # arms whose tools come from the backend (visual, mcp)
+    base = backend_tools(arm) if backend_tools else None
+    tools = (base if base is not None else arm_tools(arm, spec["tool_text"])) + [spec["submit"]]
     system = spec["system"].replace("{turns}", str(MAX_TURNS))
     if arm == "prior":  # no-telemetry control: what the model answers from the prompt alone (memorisation check)
         system += ("\n\nIn this run you have no telemetry tools. Call submit_answer right away with your "
                    "best guess from the information above.")
-    messages = [{"role": "user", "content": spec["user"]}]
+    ctx = getattr(backend, "arm_context", None)  # e.g. the Grafana arms' incident label and time window
+    messages = [{"role": "user", "content": spec["user"] + (ctx(incident_id, arm) if ctx else "")}]
     trace_id, root = secrets.token_hex(16), secrets.token_hex(8)
     spans, outputs, calls, texts, turns_log = [], [], [], [], []
     totals = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
@@ -289,12 +310,13 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None, meter=Non
             except Exception as e:  # noqa: BLE001 - surface to the agent as a tool error
                 out, meta = "tool error: %s" % e, {"tool_ms": (time.time() - t1) * 1000}
             tool_ms += meta.get("tool_ms", 0)
-            outputs.append(out)
+            text = _result_text(out)  # out may be content blocks with images (visual arm)
+            outputs.append(text)
             calls.append({"turn": turn, "t_ms": round((t1 - t_start) * 1000), "tool": b.name, "input": dict(b.input),
-                          "chars": len(out), "output": out, "wandered": _wandered(arm, dict(b.input)), **meta})
+                          "chars": len(text), "output": text, "wandered": _wandered(arm, dict(b.input)), **meta})
             spans.append(_span(trace_id, root, "execute_tool %s" % b.name, t1, meta.get("tool_ms", 0),
                                {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": b.name,
-                                "agentlab.result_chars": len(out), "agentlab.backend": backend.name}))
+                                "agentlab.result_chars": len(text), "agentlab.backend": backend.name}))
             results.append({"type": "tool_result", "tool_use_id": b.id, "content": out})
         if infra:
             break
@@ -326,6 +348,13 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None, meter=Non
                    "stop_reason": stop, "assistant_text": texts,
                    "wandered": any(c["wandered"] for c in calls)},
     }
+
+
+def _result_text(out):
+    if isinstance(out, str):
+        return out
+    from .dashboards import content_text
+    return content_text(out)
 
 
 def _wandered(arm, args):

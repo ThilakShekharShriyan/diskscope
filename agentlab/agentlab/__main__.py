@@ -100,8 +100,10 @@ def cmd_run(a):
     live = a.model != "mock"
     if live and not a.live:
         sys.exit("refusing to call a live model without --live")
-    if live and a.backend == "local" and "files" in arms:
+    if live and a.backend in ("local", "grafana") and "files" in arms:
         sys.exit("the files arm needs --backend archil for live models (local shell is disabled)")
+    if set(arms) & set(tools.GRAFANA_ARMS) and a.backend != "grafana":
+        sys.exit("arms %s need --backend grafana (python3 -m agentlab grafana up/load first)" % tools.GRAFANA_ARMS)
     jobs = [(i, arm, t) for i in _ids(a.incidents) for arm in arms for t in range(a.trials)]
     random.Random(a.seed).shuffle(jobs)
     # Archil calls per worker: enough for every job to use its whole tool-call budget
@@ -110,6 +112,10 @@ def cmd_run(a):
     def make_backend():
         if a.backend == "local":
             return tools.LocalBackend(a.root, allow_shell=not live)
+        if a.backend == "grafana":  # visual/mcp on the docker stack; other arms on the local layout
+            from . import dashboards
+            return dashboards.GrafanaBackend(fallback=tools.LocalBackend(a.root, allow_shell=not live) if a.root else None,
+                                             image_dir=os.path.join(trace_dir, "images"))
         from .archil import Archil
         return tools.ArchilBackend(Archil(max_calls=max_calls), a.prefix)
 
@@ -167,6 +173,35 @@ def cmd_run(a):
     print("wrote %s (%d runs, traces in %s)" % (a.out, len(obs), trace_dir))
 
 
+def cmd_grafana(a):
+    from . import dashboards as D
+    try:
+        if a.action == "up":
+            D.stack_up()
+            print(json.dumps(D.stack_status()))
+        elif a.action == "load":
+            if not a.root:
+                sys.exit("--root is required")
+            D.stack_load(a.root, _ids(a.incidents) if a.incidents else None)
+        elif a.action == "status":
+            print(json.dumps(D.stack_status()))
+        elif a.action == "down":
+            D.stack_down()
+        elif a.action == "tools":  # the real mcp-grafana tool list the mcp arm sends, and its size
+            b = D.GrafanaBackend()
+            defs = b.arm_tools("mcp")
+            info = {"server": b._mcp.server_info.get("serverInfo"), "image": D.MCP_IMAGE, "args": D.MCP_ARGS,
+                    "n_tools": len(defs), "json_chars": len(json.dumps(defs)),
+                    "approx_tokens_chars_div4": D.tool_defs_tokens(defs), "tools": defs}
+            b.close()
+            if a.out:
+                with open(a.out, "w") as f:
+                    json.dump(info, f, indent=1)
+            print(json.dumps({k: v for k, v in info.items() if k != "tools"}))
+    except D.StackUnavailable as e:
+        sys.exit(str(e))
+
+
 def cmd_estimate(a):
     """Project the cost of a full matrix from a pilot's measured per-run tokens (per arm)."""
     d = json.load(open(a.pilot))
@@ -202,7 +237,7 @@ def main(argv=None):
     s.add_argument("--batch", type=int, default=8, help="incidents per exec")
     s.set_defaults(fn=cmd_prepare_archil)
     s = sub.add_parser("run")
-    s.add_argument("--backend", choices=["local", "archil"], default="local")
+    s.add_argument("--backend", choices=["local", "archil", "grafana"], default="local")
     s.add_argument("--root", help="local layout root (local backend)")
     s.add_argument("--prefix", help="disk-relative layout root (archil backend)")
     s.add_argument("--arms", default="files,sql,digest")
@@ -218,6 +253,12 @@ def main(argv=None):
                    help="concurrent runs; keep 1 when comparing Archil latency (fan-out >= 4 slows calls)")
     s.add_argument("--out", default="results/agentlab.json")
     s.set_defaults(fn=cmd_run)
+    s = sub.add_parser("grafana", help="the docker stack for the visual and mcp arms")
+    s.add_argument("action", choices=["up", "load", "status", "down", "tools"])
+    s.add_argument("--root", help="prepared layout root (load)")
+    s.add_argument("--incidents", help="ids (load); default: every grafana/<opaque> dir under --root")
+    s.add_argument("--out", help="tools: write the mcp-grafana tool list here (JSON)")
+    s.set_defaults(fn=cmd_grafana)
     s = sub.add_parser("estimate")
     s.add_argument("--pilot", required=True, help="RunReport from a live pilot")
     s.add_argument("--incidents")

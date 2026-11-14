@@ -5,7 +5,8 @@ same submit_answer tool. Arms 2-4 run on a backend:
   LocalBackend  - a directory on this machine (shell only with allow_shell=True,
                   which the harness permits for the scripted mock model only)
   ArchilBackend - each tool call is one Archil exec (a fresh microVM) over the disk
-The grafana arms (0 visual, 1 mcp) need the docker stack and are not built yet.
+The grafana arms (visual, mcp) run on dashboards.GrafanaBackend over the docker stack;
+their tools come from that backend (rendered PNGs; the live mcp-grafana tool list).
 """
 import json
 import os
@@ -19,8 +20,9 @@ from .incidents import CAUSES, COMPONENTS
 from .prepare import DEFAULT_SALT, opaque
 
 OUTPUT_CAP = 8000
-ARMS = ["files", "sql", "digest", "prior"]  # implemented; prior = no telemetry tools (control)
-PLANNED_ARMS = ["visual", "mcp"]           # need docker (Prometheus, Loki, Grafana)
+ARMS = ["files", "sql", "digest", "prior", "visual", "mcp"]  # prior = no telemetry tools (control)
+PLANNED_ARMS = []
+GRAFANA_ARMS = ["visual", "mcp"]  # need the docker stack and --backend grafana (dashboards.py)
 
 SUBMIT = {
     "name": "submit_answer",
@@ -42,6 +44,8 @@ SUBMIT = {
 
 ARM_TOOLS = {
     "prior": [],
+    "visual": [],  # supplied by dashboards.GrafanaBackend.arm_tools
+    "mcp": [],     # supplied by dashboards.GrafanaBackend.arm_tools (live tools/list from mcp-grafana)
     "files": [{
         "name": "shell",
         "description": ("Run a shell command in the telemetry directory and get stdout+stderr "
