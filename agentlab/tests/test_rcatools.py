@@ -154,7 +154,7 @@ class EndToEndTest(unittest.TestCase):
         # the case is not in the committed subset: give run_one a spec for it
         from agentlab import rcaeval
         orig = rcaeval._subset_by_case
-        rcaeval._subset_by_case = lambda: {CASE: {"case": CASE, "service": "fooservice", "fault": "cpu"}}
+        rcaeval._subset_by_case = lambda suite="rcaeval": {CASE: {"case": CASE, "service": "fooservice", "fault": "cpu"}}
         try:
             spec = harness.task_spec(INC)
             o = harness.run_one(INC, "rcatools", harness.MockModel("rcatools", spec["mock_answer"]), b)

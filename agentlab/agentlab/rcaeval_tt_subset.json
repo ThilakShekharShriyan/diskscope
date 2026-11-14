@@ -1,0 +1,152 @@
+[
+ {
+  "case": "re2tt_ts-auth-service_cpu_1",
+  "service": "ts-auth-service",
+  "fault": "cpu"
+ },
+ {
+  "case": "re2tt_ts-auth-service_delay_1",
+  "service": "ts-auth-service",
+  "fault": "delay"
+ },
+ {
+  "case": "re2tt_ts-auth-service_disk_3",
+  "service": "ts-auth-service",
+  "fault": "disk"
+ },
+ {
+  "case": "re2tt_ts-auth-service_loss_3",
+  "service": "ts-auth-service",
+  "fault": "loss"
+ },
+ {
+  "case": "re2tt_ts-auth-service_mem_2",
+  "service": "ts-auth-service",
+  "fault": "mem"
+ },
+ {
+  "case": "re2tt_ts-auth-service_socket_3",
+  "service": "ts-auth-service",
+  "fault": "socket"
+ },
+ {
+  "case": "re2tt_ts-order-service_cpu_1",
+  "service": "ts-order-service",
+  "fault": "cpu"
+ },
+ {
+  "case": "re2tt_ts-order-service_delay_2",
+  "service": "ts-order-service",
+  "fault": "delay"
+ },
+ {
+  "case": "re2tt_ts-order-service_disk_1",
+  "service": "ts-order-service",
+  "fault": "disk"
+ },
+ {
+  "case": "re2tt_ts-order-service_loss_2",
+  "service": "ts-order-service",
+  "fault": "loss"
+ },
+ {
+  "case": "re2tt_ts-order-service_mem_1",
+  "service": "ts-order-service",
+  "fault": "mem"
+ },
+ {
+  "case": "re2tt_ts-order-service_socket_2",
+  "service": "ts-order-service",
+  "fault": "socket"
+ },
+ {
+  "case": "re2tt_ts-route-service_cpu_3",
+  "service": "ts-route-service",
+  "fault": "cpu"
+ },
+ {
+  "case": "re2tt_ts-route-service_delay_1",
+  "service": "ts-route-service",
+  "fault": "delay"
+ },
+ {
+  "case": "re2tt_ts-route-service_disk_1",
+  "service": "ts-route-service",
+  "fault": "disk"
+ },
+ {
+  "case": "re2tt_ts-route-service_loss_2",
+  "service": "ts-route-service",
+  "fault": "loss"
+ },
+ {
+  "case": "re2tt_ts-route-service_mem_3",
+  "service": "ts-route-service",
+  "fault": "mem"
+ },
+ {
+  "case": "re2tt_ts-route-service_socket_3",
+  "service": "ts-route-service",
+  "fault": "socket"
+ },
+ {
+  "case": "re2tt_ts-train-service_cpu_3",
+  "service": "ts-train-service",
+  "fault": "cpu"
+ },
+ {
+  "case": "re2tt_ts-train-service_delay_2",
+  "service": "ts-train-service",
+  "fault": "delay"
+ },
+ {
+  "case": "re2tt_ts-train-service_disk_2",
+  "service": "ts-train-service",
+  "fault": "disk"
+ },
+ {
+  "case": "re2tt_ts-train-service_loss_3",
+  "service": "ts-train-service",
+  "fault": "loss"
+ },
+ {
+  "case": "re2tt_ts-train-service_mem_2",
+  "service": "ts-train-service",
+  "fault": "mem"
+ },
+ {
+  "case": "re2tt_ts-train-service_socket_1",
+  "service": "ts-train-service",
+  "fault": "socket"
+ },
+ {
+  "case": "re2tt_ts-travel-service_cpu_1",
+  "service": "ts-travel-service",
+  "fault": "cpu"
+ },
+ {
+  "case": "re2tt_ts-travel-service_delay_2",
+  "service": "ts-travel-service",
+  "fault": "delay"
+ },
+ {
+  "case": "re2tt_ts-travel-service_disk_1",
+  "service": "ts-travel-service",
+  "fault": "disk"
+ },
+ {
+  "case": "re2tt_ts-travel-service_loss_3",
+  "service": "ts-travel-service",
+  "fault": "loss"
+ },
+ {
+  "case": "re2tt_ts-travel-service_mem_3",
+  "service": "ts-travel-service",
+  "fault": "mem"
+ },
+ {
+  "case": "re2tt_ts-travel-service_socket_3",
+  "service": "ts-travel-service",
+  "fault": "socket"
+ }
+]

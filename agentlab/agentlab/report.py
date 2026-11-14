@@ -95,7 +95,7 @@ def _inspected(d, calls):
     return inspected_root(d["arm"], calls, d["truth"]["components"][0])
 
 
-VARIANT_SUFFIX = {"rcaeval+t": "+time", "rcaevalm": "+mix", "rcaevalq": "+mix"}
+VARIANT_SUFFIX = {"rcaeval+t": "+time", "rcaevaltt+t": "+time", "rcaevalm": "+mix", "rcaevalq": "+mix"}
 
 
 def _is_control(arm):

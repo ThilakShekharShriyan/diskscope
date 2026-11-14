@@ -4,7 +4,7 @@
   python3 -m agentlab prepare-archil --prefix agentlab/<build> [--incidents ids]
   python3 -m agentlab upload-archil --root ../data-ext/al-rcaeval --prefix agentlab/rc1 [--parallel 10]
   python3 -m agentlab run --backend local|archil --root DIR|--prefix P --arms files,sql,digest
-                          [--incidents ids|main|held-out|rcaeval|rcaevalmix|rcaevalq] [--trials N] [--model mock|claude-...|gpt-...]
+                          [--incidents ids|main|held-out|rcaeval[+t]|rcaevaltt[+t]|rcaevaltt-pilot|rcaevalmix|rcaevalq] [--trials N] [--model mock|claude-...|gpt-...]
                           [--live] [--effort medium] [--max-usd 5] [--parallel N] [--out FILE]
   python3 -m agentlab estimate --pilot RUN.json [--incidents ...] [--trials N]
   python3 -m agentlab lessons build --runs RUN.json ... --out-dir lessons/ [--dry-run] [--max-usd 2]
@@ -35,9 +35,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _ids(arg):
-    if arg in ("rcaeval", "rcaeval+t"):
+    if arg in ("rcaeval", "rcaeval+t", "rcaevaltt", "rcaevaltt+t", "rcaevaltt-pilot"):
         from . import rcaeval
-        return [arg + ":" + c["case"] for c in rcaeval.load_subset()]
+        return rcaeval.ids(arg)
     if arg in ("rcaevalmix", "rcaevalq"):  # mixed suite with healthy controls / all 30 healthy windows
         from . import rcaeval_controls as RC
         return RC.mix_ids() if arg == "rcaevalmix" else RC.quiet_ids()
@@ -48,7 +48,7 @@ def _ids(arg):
     if arg == "held-out":
         return [i["id"] for i in incidents.HELD_OUT]
     ids = arg.split(",")
-    bad = [i for i in ids if i not in incidents.ALL and not i.startswith(("rcaeval:", "rcaeval+t:", "rcaevalm:", "rcaevalq:"))]
+    bad = [i for i in ids if i not in incidents.ALL and not i.startswith(("rcaeval:", "rcaeval+t:", "rcaevaltt:", "rcaevaltt+t:", "rcaevalm:", "rcaevalq:"))]
     if bad:
         sys.exit("unknown incidents: %s" % bad)
     return ids
