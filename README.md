@@ -89,6 +89,21 @@ cargo run --release --manifest-path branchlab/Cargo.toml -- archil --runs 2 --ca
 python3 branchlab/report.py data/branchlab/*.json --output docs/branchlab.html
 ```
 
+## Phase 3 · AgentLab: which interface helps an agent diagnose an incident?
+
+[`agentlab/`](agentlab/) serves the same incidents to LLM agents through different interfaces and grades their diagnosis deterministically. The suite is RCAEval (real fault injections, WWW'25). The models are `claude-opus-5-5` and `gpt-5.6-sol`. Each cell is 30 cases × 3 trials. Reports: [Online Boutique, all interfaces →](docs/agentlab.html) · [Train Ticket →](docs/agentlab-tt.html) · [healthy-window controls →](docs/agentlab-controls.html)
+
+- **Raw data beats a precomputed digest on fault type.** On Online Boutique, SQL got service and fault both right in 90% of runs for Claude (80% for GPT); our frozen digest managed 52% / 50% at a third of the cost. On Train Ticket (68 services) the two are tied on "both right".
+- **Dashboards.** Grafana screenshots read by the model: 73% / 72%. mcp-grafana: 62% / 67% at ~$0.17–0.18 a run, the most expensive interface.
+- **Feedback loop.** A lessons file distilled from graded runs (5-fold, leave-one-service-out) lifted the digest from 52% → 79% (Claude, Holm p = 0.02) and 50% → 72% (GPT, not significant after Holm). It did nothing for SQL.
+- **Controls.**
+  - With no telemetry, both models score 14–17% on the service, below chance among the 5 candidates (20%), so there's no sign they memorised the dataset.
+  - A planted false digest line is named first in only 7% of runs.
+
+```bash
+python3 -m agentlab.report data/agentlab/runs-2026-11-14/*.gz --html docs/agentlab.html   # see agentlab/README.md
+```
+
 ## Methodology
 
 Borrowed from [criterion.rs](https://bheisler.github.io/criterion.rs/book/analysis.html), [hyperfine](https://github.com/sharkdp/hyperfine), [fio](https://fio.readthedocs.io/), [ClickBench](https://github.com/ClickHouse/ClickBench) and Hoefler & Belli's [*Scientific Benchmarking of Parallel Computing Systems*](https://htor.inf.ethz.ch/publications/img/hoefler-scientific-benchmarking.pdf).
