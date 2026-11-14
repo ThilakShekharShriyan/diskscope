@@ -1,0 +1,759 @@
+{
+"default": {
+"stat": [
+{
+"queue": 29.0,
+"execute": 36.0,
+"work": 0.00287,
+"network": 81.705375
+},
+{
+"queue": 29.0,
+"execute": 47.0,
+"work": 0.00515,
+"network": 87.850291
+},
+{
+"queue": 34.0,
+"execute": 39.0,
+"work": 0.00463,
+"network": 87.89624999999998
+},
+{
+"queue": 31.0,
+"execute": 40.0,
+"work": 0.00454,
+"network": 84.949375
+},
+{
+"queue": 32.0,
+"execute": 37.0,
+"work": 0.00384,
+"network": 87.98775
+},
+{
+"queue": 32.0,
+"execute": 40.0,
+"work": 0.00308,
+"network": 87.770375
+},
+{
+"queue": 29.0,
+"execute": 37.0,
+"work": 0.00524,
+"network": 88.245
+},
+{
+"queue": 34.0,
+"execute": 37.0,
+"work": 0.00336,
+"network": 88.07166699999999
+},
+{
+"queue": 33.0,
+"execute": 39.0,
+"work": 0.00362,
+"network": 87.68629200000001
+},
+{
+"queue": 33.0,
+"execute": 38.0,
+"work": 0.00355,
+"network": 84.19625000000002
+}
+],
+"hash-64m": [
+{
+"queue": 32.0,
+"execute": 78.0,
+"work": 31.781642,
+"network": 86.99812499999999
+},
+{
+"queue": 34.0,
+"execute": 77.0,
+"work": 31.069942,
+"network": 88.025
+},
+{
+"queue": 35.0,
+"execute": 75.0,
+"work": 30.746922,
+"network": 84.433209
+},
+{
+"queue": 29.0,
+"execute": 70.0,
+"work": 30.567252,
+"network": 87.05875
+},
+{
+"queue": 34.0,
+"execute": 75.0,
+"work": 30.471401,
+"network": 87.01124999999999
+},
+{
+"queue": 51.0,
+"execute": 75.0,
+"work": 30.545842,
+"network": 92.38891699999999
+},
+{
+"queue": 35.0,
+"execute": 76.0,
+"work": 31.044353,
+"network": 81.37479099999999
+},
+{
+"queue": 33.0,
+"execute": 77.0,
+"work": 30.819262,
+"network": 86.17741699999999
+},
+{
+"queue": 33.0,
+"execute": 75.0,
+"work": 30.626652,
+"network": 83.24125000000001
+},
+{
+"queue": 33.0,
+"execute": 75.0,
+"work": 30.583072,
+"network": 85.72483400000002
+}
+],
+"noop": [
+{
+"queue": 31.0,
+"execute": 37.0,
+"work": 0.0,
+"network": 86.57779099999999
+},
+{
+"queue": 32.0,
+"execute": 40.0,
+"work": 0.0,
+"network": 88.56770800000001
+},
+{
+"queue": 31.0,
+"execute": 39.0,
+"work": 0.0,
+"network": 81.85062499999998
+},
+{
+"queue": 34.0,
+"execute": 39.0,
+"work": 0.0,
+"network": 86.25970799999999
+},
+{
+"queue": 33.0,
+"execute": 37.0,
+"work": 0.0,
+"network": 88.03475
+},
+{
+"queue": 42.0,
+"execute": 38.0,
+"work": 0.0,
+"network": 89.56329200000002
+},
+{
+"queue": 32.0,
+"execute": 38.0,
+"work": 0.0,
+"network": 85.651375
+},
+{
+"queue": 33.0,
+"execute": 39.0,
+"work": 0.0,
+"network": 86.42379200000002
+},
+{
+"queue": 31.0,
+"execute": 38.0,
+"work": 0.0,
+"network": 87.09124999999997
+},
+{
+"queue": 30.0,
+"execute": 35.0,
+"work": 0.0,
+"network": 87.057583
+}
+],
+"small-files": [
+{
+"queue": 31.0,
+"execute": 169.0,
+"work": 8.978226,
+"network": 84.26779200000004
+},
+{
+"queue": 33.0,
+"execute": 191.0,
+"work": 14.13122,
+"network": 89.46825000000001
+},
+{
+"queue": 33.0,
+"execute": 190.0,
+"work": 14.71723,
+"network": 85.40354100000002
+},
+{
+"queue": 33.0,
+"execute": 172.0,
+"work": 11.891569,
+"network": 84.95966600000003
+},
+{
+"queue": 33.0,
+"execute": 184.0,
+"work": 14.16658,
+"network": 86.04762499999998
+},
+{
+"queue": 29.0,
+"execute": 160.0,
+"work": 8.717616,
+"network": 86.16308299999997
+},
+{
+"queue": 33.0,
+"execute": 170.0,
+"work": 10.045637,
+"network": 87.29729199999997
+},
+{
+"queue": 29.0,
+"execute": 167.0,
+"work": 9.277397,
+"network": 83.27191699999997
+},
+{
+"queue": 32.0,
+"execute": 167.0,
+"work": 9.627017,
+"network": 90.266167
+},
+{
+"queue": 33.0,
+"execute": 195.0,
+"work": 16.075521,
+"network": 90.21308299999998
+}
+],
+"seq-write": [
+{
+"queue": 31.0,
+"execute": 194.0,
+"work": 40.075238,
+"network": 89.43766699999998
+},
+{
+"queue": 34.0,
+"execute": 201.0,
+"work": 39.572818,
+"network": 85.93995899999999
+},
+{
+"queue": 30.0,
+"execute": 183.0,
+"work": 39.569388,
+"network": 187.46337499999998
+},
+{
+"queue": 31.0,
+"execute": 186.0,
+"work": 41.18674,
+"network": 86.69591700000001
+},
+{
+"queue": 33.0,
+"execute": 196.0,
+"work": 46.320993,
+"network": 85.05758299999997
+},
+{
+"queue": 33.0,
+"execute": 184.0,
+"work": 44.538492,
+"network": 87.69829099999998
+},
+{
+"queue": 30.0,
+"execute": 179.0,
+"work": 36.930237,
+"network": 84.422459
+},
+{
+"queue": 32.0,
+"execute": 192.0,
+"work": 39.320948,
+"network": 85.29120799999998
+},
+{
+"queue": 35.0,
+"execute": 204.0,
+"work": 44.305702,
+"network": 789.8136670000001
+},
+{
+"queue": 31.0,
+"execute": 221.0,
+"work": 48.340855,
+"network": 81.89691700000003
+}
+],
+"sqlite-commit": [
+{
+"queue": 31.0,
+"execute": 492.0,
+"work": 294.217181,
+"network": 87.853834
+},
+{
+"queue": 34.0,
+"execute": 517.0,
+"work": 342.948825,
+"network": 94.32791700000007
+},
+{
+"queue": 31.0,
+"execute": 477.0,
+"work": 312.886404,
+"network": 86.72474999999997
+},
+{
+"queue": 33.0,
+"execute": 537.0,
+"work": 358.163927,
+"network": 80.45037500000001
+},
+{
+"queue": 34.0,
+"execute": 511.0,
+"work": 331.382417,
+"network": 81.1707909999999
+},
+{
+"queue": 32.0,
+"execute": 497.0,
+"work": 327.308034,
+"network": 91.31945799999994
+},
+{
+"queue": 32.0,
+"execute": 490.0,
+"work": 312.864374,
+"network": 123.47112500000003
+},
+{
+"queue": 34.0,
+"execute": 488.0,
+"work": 312.077453,
+"network": 179.07904200000007
+},
+{
+"queue": 40.0,
+"execute": 477.0,
+"work": 305.167138,
+"network": 88.30479200000002
+},
+{
+"queue": 32.0,
+"execute": 514.0,
+"work": 344.295136,
+"network": 96.965375
+}
+],
+"seq-read": [
+{
+"queue": 33.0,
+"execute": 197.0,
+"work": 1.858771,
+"network": 92.49549999999999
+},
+{
+"queue": 34.0,
+"execute": 204.0,
+"work": 2.634762,
+"network": 87.26249999999999
+},
+{
+"queue": 31.0,
+"execute": 182.0,
+"work": 2.661962,
+"network": 87.308291
+},
+{
+"queue": 30.0,
+"execute": 212.0,
+"work": 1.576861,
+"network": 81.593458
+},
+{
+"queue": 32.0,
+"execute": 193.0,
+"work": 2.790942,
+"network": 150.932416
+},
+{
+"queue": 33.0,
+"execute": 198.0,
+"work": 3.470832,
+"network": 91.46045800000002
+},
+{
+"queue": 32.0,
+"execute": 208.0,
+"work": 2.125852,
+"network": 87.93733300000002
+},
+{
+"queue": 37.0,
+"execute": 206.0,
+"work": 2.414242,
+"network": 86.06145799999996
+},
+{
+"queue": 33.0,
+"execute": 217.0,
+"work": 1.994632,
+"network": 88.51654199999996
+},
+{
+"queue": 29.0,
+"execute": 195.0,
+"work": 1.594061,
+"network": 84.888667
+}
+],
+"fsync-4k": [
+{
+"queue": 45.0,
+"execute": 153.0,
+"work": 7.307526,
+"network": 84.64916699999998
+},
+{
+"queue": 34.0,
+"execute": 158.0,
+"work": 7.218195,
+"network": 83.76520799999997
+},
+{
+"queue": 32.0,
+"execute": 147.0,
+"work": 5.841094,
+"network": 86.09695900000003
+},
+{
+"queue": 32.0,
+"execute": 148.0,
+"work": 6.259245,
+"network": 87.72029200000003
+},
+{
+"queue": 28.0,
+"execute": 152.0,
+"work": 6.628545,
+"network": 82.69287500000002
+},
+{
+"queue": 34.0,
+"execute": 160.0,
+"work": 7.347975,
+"network": 85.73450000000003
+},
+{
+"queue": 32.0,
+"execute": 157.0,
+"work": 7.138335,
+"network": 84.36325
+},
+{
+"queue": 33.0,
+"execute": 153.0,
+"work": 6.448684,
+"network": 81.935834
+},
+{
+"queue": 34.0,
+"execute": 160.0,
+"work": 6.884905,
+"network": 96.20695899999998
+},
+{
+"queue": 32.0,
+"execute": 165.0,
+"work": 6.111104,
+"network": 80.61891700000001
+}
+]
+},
+"slim": {
+"small-files": [
+{
+"queue": 139.0,
+"execute": 169.0,
+"work": 8.584727,
+"network": 85.649833
+},
+{
+"queue": 147.0,
+"execute": 186.0,
+"work": 16.105662,
+"network": 77.858791
+},
+{
+"queue": 137.0,
+"execute": 171.0,
+"work": 10.561448,
+"network": 81.64575000000002
+},
+{
+"queue": 141.0,
+"execute": 166.0,
+"work": 9.137737,
+"network": 86.60470900000001
+},
+{
+"queue": 137.0,
+"execute": 176.0,
+"work": 10.995738,
+"network": 84.91300000000001
+}
+],
+"stat": [
+{
+"queue": 161.0,
+"execute": 30.0,
+"work": 0.05632,
+"network": 82.52479199999999
+},
+{
+"queue": 147.0,
+"execute": 28.0,
+"work": 0.09704,
+"network": 83.51175
+},
+{
+"queue": 141.0,
+"execute": 28.0,
+"work": 0.08514,
+"network": 88.94320900000002
+},
+{
+"queue": 145.0,
+"execute": 27.0,
+"work": 0.10601,
+"network": 86.922166
+},
+{
+"queue": 139.0,
+"execute": 27.0,
+"work": 0.08237,
+"network": 86.40516600000001
+}
+],
+"sqlite-commit": [
+{
+"queue": 144.0,
+"execute": 486.0,
+"work": 311.700423,
+"network": 87.47500000000002
+},
+{
+"queue": 147.0,
+"execute": 472.0,
+"work": 304.332567,
+"network": 85.1105
+},
+{
+"queue": 145.0,
+"execute": 498.0,
+"work": 317.993508,
+"network": 98.3955840000001
+},
+{
+"queue": 146.0,
+"execute": 500.0,
+"work": 328.940105,
+"network": 77.47762499999999
+},
+{
+"queue": 158.0,
+"execute": 484.0,
+"work": 308.598991,
+"network": 88.40420800000004
+}
+],
+"seq-write": [
+{
+"queue": 147.0,
+"execute": 188.0,
+"work": 39.333408,
+"network": 141.58554199999998
+},
+{
+"queue": 140.0,
+"execute": 192.0,
+"work": 38.862798,
+"network": 86.36325
+},
+{
+"queue": 148.0,
+"execute": 198.0,
+"work": 43.659431,
+"network": 86.04758300000003
+},
+{
+"queue": 136.0,
+"execute": 181.0,
+"work": 40.631409,
+"network": 90.01745900000003
+},
+{
+"queue": 145.0,
+"execute": 210.0,
+"work": 60.321833,
+"network": 94.38345800000002
+}
+],
+"fsync-4k": [
+{
+"queue": 144.0,
+"execute": 156.0,
+"work": 7.313226,
+"network": 84.1825
+},
+{
+"queue": 143.0,
+"execute": 158.0,
+"work": 7.639586,
+"network": 82.366084
+},
+{
+"queue": 138.0,
+"execute": 147.0,
+"work": 5.869444,
+"network": 168.13020799999998
+},
+{
+"queue": 144.0,
+"execute": 165.0,
+"work": 7.547166,
+"network": 90.12550000000005
+},
+{
+"queue": 145.0,
+"execute": 159.0,
+"work": 7.851556,
+"network": 91.55429099999998
+}
+],
+"hash-64m": [
+{
+"queue": 138.0,
+"execute": 64.0,
+"work": 30.632812,
+"network": 84.23399999999998
+},
+{
+"queue": 137.0,
+"execute": 66.0,
+"work": 30.576972,
+"network": 84.63454100000001
+},
+{
+"queue": 134.0,
+"execute": 65.0,
+"work": 30.467632,
+"network": 172.50041700000003
+},
+{
+"queue": 143.0,
+"execute": 64.0,
+"work": 30.507332,
+"network": 82.531834
+},
+{
+"queue": 138.0,
+"execute": 65.0,
+"work": 30.678231,
+"network": 84.632
+}
+],
+"noop": [
+{
+"queue": 151.0,
+"execute": 30.0,
+"work": 0.0,
+"network": 86.87312500000002
+},
+{
+"queue": 137.0,
+"execute": 27.0,
+"work": 0.0,
+"network": 85.82024999999999
+},
+{
+"queue": 145.0,
+"execute": 27.0,
+"work": 0.0,
+"network": 91.721541
+},
+{
+"queue": 141.0,
+"execute": 27.0,
+"work": 0.0,
+"network": 95.54079200000001
+},
+{
+"queue": 159.0,
+"execute": 30.0,
+"work": 0.0,
+"network": 94.61595899999998
+}
+],
+"seq-read": [
+{
+"queue": 144.0,
+"execute": 202.0,
+"work": 1.881621,
+"network": 89.11420800000002
+},
+{
+"queue": 142.0,
+"execute": 192.0,
+"work": 2.626792,
+"network": 86.58345800000001
+},
+{
+"queue": 137.0,
+"execute": 192.0,
+"work": 1.939742,
+"network": 86.63762500000001
+},
+{
+"queue": 145.0,
+"execute": 209.0,
+"work": 2.645842,
+"network": 83.35624999999999
+},
+{
+"queue": 143.0,
+"execute": 192.0,
+"work": 1.992602,
+"network": 90.42183399999999
+}
+]
+},
+"_source": "DiskScope v0.2 published runs (data/2026-11-13-v0.2-archil-exec-*.json), ok observations only"
+}
