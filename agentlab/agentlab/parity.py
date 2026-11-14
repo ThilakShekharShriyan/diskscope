@@ -30,7 +30,11 @@ CALLS = {
             ("query", {"sql": "SELECT series, max(value) FROM metrics WHERE series LIKE '%cpu' "
                               "GROUP BY series ORDER BY series"}),
             ("query", {"sql": "SELECT ts_ms, series, value FROM metrics ORDER BY ts_ms, series LIMIT 5"}),
-            ("query", {"sql": "SELECT name, dur_ms FROM spans ORDER BY dur_ms DESC, span_id LIMIT 3"})],
+            ("query", {"sql": "SELECT name, dur_ms FROM spans ORDER BY dur_ms DESC, span_id LIMIT 3"}),
+            # known CLI-vs-Python csv differences: unrounded REALs, zero rows, strings with spaces
+            ("query", {"sql": "SELECT avg(dur_ms), avg(value) FROM spans, (SELECT avg(value) AS value FROM metrics)"}),
+            ("query", {"sql": "SELECT * FROM logs WHERE 0"}),
+            ("query", {"sql": "SELECT DISTINCT name FROM spans WHERE name LIKE '% %' ORDER BY name LIMIT 3"})],
     "digest": [("get_digest", {}), ("drill", {"id": "M1"}), ("drill", {"id": "L1"}), ("drill", {"id": "E1"}),
                ("drill", {"id": "Z9"})],
 }
