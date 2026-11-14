@@ -18,7 +18,10 @@ from .tools import ARM_TOOLS, OUTPUT_CAP, SUBMIT, SYSTEM, leaves_dir
 # $ per million tokens: (input, output, cache read). From the claude-api skill's
 # model table (cached 2026-11-03); recheck before publishing dollar figures.
 PRICES = {"claude-opus-5-5": (4.0, 20.0, 0.20), "claude-sonnet-5-5": (2.0, 10.0, 0.10),
-          "claude-haiku-5-5": (0.10, 0.50, None)}
+          "claude-haiku-5-5": (0.10, 0.50, None),
+          # OpenAI standard tier, <=272K-token requests; developers.openai.com/api/docs/pricing, 2026-11-14
+          "gpt-5.6-sol": (4.0, 20.0, 0.40), "gpt-5.6-terra": (2.0, 12.0, 0.20), "gpt-5.6-luna": (0.20, 1.20, 0.02),
+          "gpt-5.5": (5.0, 30.0, 0.50), "gpt-5.4": (2.5, 15.0, 0.25), "gpt-5.4-mini": (0.75, 4.50, 0.075)}
 MAX_TURNS = 20
 MAX_INPUT_TOKENS = 600_000   # per run, summed over turns; same for every arm
 
@@ -71,6 +74,74 @@ class LiveModel:
                  "cache_read_input_tokens": getattr(u, "cache_read_input_tokens", 0) or 0,
                  "cache_creation_input_tokens": getattr(u, "cache_creation_input_tokens", 0) or 0}
         return r.content, r.stop_reason, usage
+
+
+class OpenAIModel:
+    """OpenAI Responses API. The conversation lives server-side (previous_response_id), so the
+    model keeps its reasoning between turns, as Claude does with its thinking blocks; each turn
+    sends only the harness messages added since the last call (tool results, nudges)."""
+
+    def __init__(self, model, effort="medium"):
+        import openai  # only needed for live runs
+        self.client = openai.OpenAI()
+        self.name, self.effort = model, effort
+        self.prev, self.sent = None, 0
+
+    @staticmethod
+    def _tools(tools):
+        return [{"type": "function", "name": t["name"], "description": t["description"],
+                 "parameters": t["input_schema"], "strict": True} for t in tools]
+
+    def _input(self, messages):
+        items = []
+        for m in messages[self.sent:]:
+            if m["role"] == "assistant":
+                continue  # already held server-side
+            if isinstance(m["content"], str):
+                items.append({"role": "user", "content": m["content"]})
+            else:
+                for r in m["content"]:
+                    items.append({"type": "function_call_output", "call_id": r["tool_use_id"],
+                                  "output": r["content"] if isinstance(r["content"], str) else json.dumps(r["content"])})
+        return items
+
+    def turn(self, messages, tools, system):
+        r = self.client.responses.create(
+            model=self.name, instructions=system, input=self._input(messages), tools=self._tools(tools),
+            reasoning={"effort": self.effort}, max_output_tokens=16000, previous_response_id=self.prev,
+            parallel_tool_calls=True, store=True)
+        self.prev, self.sent = r.id, len(messages) + 1  # +1: the assistant turn the harness appends
+        content, refused = [], False
+        for it in r.output:
+            if it.type == "function_call":
+                try:
+                    args = json.loads(it.arguments or "{}")
+                except ValueError:
+                    args = {}
+                content.append(Block(type="tool_use", id=it.call_id, name=it.name, input=args))
+            elif it.type == "message":
+                for c in it.content:
+                    if c.type == "output_text":
+                        content.append(Block(type="text", text=c.text))
+                    elif c.type == "refusal":
+                        refused = True
+        u = r.usage
+        cached = getattr(getattr(u, "input_tokens_details", None), "cached_tokens", 0) or 0
+        usage = {"input_tokens": u.input_tokens - cached, "output_tokens": u.output_tokens,
+                 "cache_read_input_tokens": cached, "cache_creation_input_tokens": 0}
+        if refused:
+            stop = "refusal"
+        elif r.status == "incomplete":
+            stop = "max_tokens"
+        else:
+            stop = "tool_use" if any(b.type == "tool_use" for b in content) else "end_turn"
+        return content, stop, usage
+
+
+def make_model(name, effort="medium"):
+    if name.startswith(("gpt-", "o3", "o4")):
+        return OpenAIModel(name, effort)
+    return LiveModel(name, effort)
 
 
 def cost_usd(model, usage):

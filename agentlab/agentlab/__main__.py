@@ -5,7 +5,8 @@
   python3 -m agentlab run --backend local|archil --root DIR|--prefix P --arms files,sql,digest
                           [--incidents ids] [--trials N] [--model mock|claude-...] [--live] [--out FILE]
 
-Live models need --live and Anthropic credentials. The mock model never calls the network.
+Live models need --live and credentials (ANTHROPIC_API_KEY for claude-*, OPENAI_API_KEY for gpt-*).
+The mock model never calls the network.
 """
 import argparse
 import base64
@@ -113,7 +114,7 @@ def cmd_run(a):
             local.backend = make_backend()
         i, arm, t = job
         model = (harness.MockModel(arm, harness.task_spec(i)["mock_answer"]) if not live
-                 else harness.LiveModel(a.model, a.effort))
+                 else harness.make_model(a.model, a.effort))
         o = harness.run_one(i, arm, model, local.backend, trial=t, trace_dir=trace_dir)
         o["parallel"] = a.parallel > 1
         with lock:

@@ -125,3 +125,18 @@ class EstimateTest(unittest.TestCase):
             main(["estimate", "--pilot", f.name, "--incidents", "erofs-a,quiet-plain", "--trials", "3"])
         os.unlink(f.name)
         self.assertIn("6 runs: $1.20 (median) .. $2.40 (max)", buf.getvalue())
+
+
+class OpenAIInputTest(unittest.TestCase):
+    def test_only_new_messages_sent_and_tool_results_mapped(self):
+        m = harness.OpenAIModel.__new__(harness.OpenAIModel)
+        m.prev, m.sent = None, 0
+        msgs = [{"role": "user", "content": "go"}]
+        self.assertEqual(m._input(msgs), [{"role": "user", "content": "go"}])
+        m.prev, m.sent = "resp_1", 2  # user + assistant already on the server
+        msgs += [{"role": "assistant", "content": []},
+                 {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "call_1", "content": "out"}]}]
+        self.assertEqual(m._input(msgs), [{"type": "function_call_output", "call_id": "call_1", "output": "out"}])
+        t = harness.OpenAIModel._tools([{"name": "x", "description": "d", "input_schema": {"type": "object"}}])
+        self.assertEqual(t[0]["type"], "function")
+        self.assertTrue(t[0]["strict"])
