@@ -93,6 +93,15 @@ Cause categories:
 - no_fault: nothing is wrong"""
 
 
+REFUSE_WANDER = ("error: commands must stay in the telemetry directory "
+                 "(no '..', absolute paths or cd; use relative file names)")
+
+
+def leaves_dir(cmd):
+    """Files-arm commands that could reach outside the arm's own directory (other arms' data)."""
+    return ".." in cmd or "/mnt" in cmd or "cd /" in cmd or " /" in cmd or cmd.lstrip().startswith("/") or "~" in cmd
+
+
 def cap(text):
     if len(text) <= OUTPUT_CAP:
         return text
@@ -113,10 +122,11 @@ class LocalBackend:
         self.root, self.allow_shell, self.salt = root, allow_shell, salt
 
     def call(self, incident_id, arm, tool, args):
-        oid = opaque(incident_id, self.salt)
-        d = lambda a: os.path.join(self.root, a, oid)
+        d = lambda a: os.path.join(self.root, a, opaque(incident_id, self.salt, a))
         t0 = time.perf_counter()
         if arm == "files" and tool == "shell":
+            if leaves_dir(args["command"]):
+                return REFUSE_WANDER, {"tool_ms": 0, "refused": True}
             if not self.allow_shell:
                 out = "error: local shell is disabled for live models; use the Archil backend"
             else:
@@ -158,9 +168,10 @@ class ArchilBackend:
         self.client, self.root, self.salt = client, "%s/%s" % (MOUNT, root.strip("/")), salt
 
     def call(self, incident_id, arm, tool, args):
-        oid = opaque(incident_id, self.salt)
-        d = lambda a: "%s/%s/%s" % (self.root, a, oid)
+        d = lambda a: "%s/%s/%s" % (self.root, a, opaque(incident_id, self.salt, a))
         if arm == "files" and tool == "shell":
+            if leaves_dir(args["command"]):
+                return REFUSE_WANDER, {"tool_ms": 0, "refused": True}
             cmd = "cd %s && %s" % (shlex.quote(d("files")), args["command"])
         elif arm == "sql" and tool == "query":
             # sqlite3 CLI: no interpreter start-up; -readonly; output trimmed before transfer

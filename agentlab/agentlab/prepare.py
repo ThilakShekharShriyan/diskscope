@@ -5,8 +5,9 @@
 <root>/digest/<opaque>/  digest.txt index.json drill/<id>.txt          (digest arm)
 <root>/grafana/<opaque>/ metrics.om loki.json                          (grafana arms)
 
-<opaque> = salted hash of the incident id, so no path an agent can see names
-the incident, and each arm's data is in its own tree.
+<opaque> = salted hash of (arm, incident id): no path an agent can see names the
+incident, and the same incident has a different directory name in every arm, so
+knowing one arm's directory does not locate another arm's copy.
 """
 import hashlib
 import json
@@ -16,8 +17,8 @@ import shutil
 DEFAULT_SALT = "agentlab-v1"
 
 
-def opaque(incident_id, salt=DEFAULT_SALT):
-    return "c" + hashlib.sha256((salt + ":" + incident_id).encode()).hexdigest()[:11]
+def opaque(incident_id, salt=DEFAULT_SALT, arm=""):
+    return "c" + hashlib.sha256((salt + ":" + arm + ":" + incident_id).encode()).hexdigest()[:11]
 
 try:  # package import locally, flat namespace when shipped to a microVM
     from . import bundle, digest, generate
@@ -30,22 +31,22 @@ ARM_FILES = {"files": ["logs.jsonl", "spans.jsonl", "metrics.csv", "README.md"],
 
 def prepare(incident, root, baselines=None, salt=DEFAULT_SALT):
     data = generate.generate(incident["effects"], seed=incident["seed"], baselines=baselines)
-    oid = opaque(incident["id"], salt)
-    tmp = os.path.join(root, "_tmp", oid)
+    oid = {a: opaque(incident["id"], salt, a) for a in ("files", "sql", "grafana", "digest")}
+    tmp = os.path.join(root, "_tmp", opaque(incident["id"], salt, "_tmp"))
     bundle.write_bundle(data, tmp)
     for arm, names in ARM_FILES.items():
-        os.makedirs(os.path.join(root, arm, oid), exist_ok=True)
+        os.makedirs(os.path.join(root, arm, oid[arm]), exist_ok=True)
         for n in names:
-            shutil.copyfile(os.path.join(tmp, n), os.path.join(root, arm, oid, n))
+            shutil.copyfile(os.path.join(tmp, n), os.path.join(root, arm, oid[arm], n))
     text, index = digest.digest(data)
-    os.makedirs(os.path.join(root, "digest", oid), exist_ok=True)
-    with open(os.path.join(root, "digest", oid, "digest.txt"), "w") as f:
+    os.makedirs(os.path.join(root, "digest", oid["digest"]), exist_ok=True)
+    with open(os.path.join(root, "digest", oid["digest"], "digest.txt"), "w") as f:
         f.write(text)
-    with open(os.path.join(root, "digest", oid, "index.json"), "w") as f:
+    with open(os.path.join(root, "digest", oid["digest"], "index.json"), "w") as f:
         json.dump(index, f)
-    os.makedirs(os.path.join(root, "digest", oid, "drill"), exist_ok=True)
+    os.makedirs(os.path.join(root, "digest", oid["digest"], "drill"), exist_ok=True)
     for k, v in index.items():  # one small file per evidence id: drill() is a plain cat
-        with open(os.path.join(root, "digest", oid, "drill", k + ".txt"), "w") as f:
+        with open(os.path.join(root, "digest", oid["digest"], "drill", k + ".txt"), "w") as f:
             f.write(v)
     shutil.rmtree(tmp, ignore_errors=True)  # local only; on Archil the exec owns it, so this works there too
     return {"id": incident["id"], "dir": oid, "calls": data["calls"],

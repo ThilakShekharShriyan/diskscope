@@ -89,6 +89,16 @@ class HarnessTest(unittest.TestCase):
             for m in inc["evidence"]:
                 self.assertNotIn(m, shared, (inc["id"], m))
 
+    def test_arm_dirs_differ_and_escape_refused(self):
+        from agentlab import prepare as P, tools as T
+        dirs = {a: P.opaque("erofs-a", arm=a) for a in ("files", "sql", "digest", "grafana")}
+        self.assertEqual(len(set(dirs.values())), 4)
+        b = T.LocalBackend("/nonexistent", allow_shell=True)
+        for cmd in ("cat ../../digest/*/digest.txt", "ls /mnt/archil", "cat ~/x", "/bin/ls"):
+            out, meta = b.call("erofs-a", "files", "shell", {"command": cmd})
+            self.assertTrue(meta.get("refused"), cmd)
+            self.assertIn("must stay in the telemetry directory", out)
+
     def test_wander_flag(self):
         self.assertTrue(harness._wandered("files", {"command": "cat ../../digest/*/digest.txt"}))
         self.assertFalse(harness._wandered("files", {"command": "grep ERROR logs.jsonl | head"}))

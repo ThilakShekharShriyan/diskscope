@@ -13,7 +13,7 @@ import secrets
 import time
 
 from .incidents import ALL
-from .tools import ARM_TOOLS, SUBMIT, SYSTEM
+from .tools import ARM_TOOLS, SUBMIT, SYSTEM, leaves_dir
 
 # $ per million tokens: (input, output, cache read). From the claude-api skill's
 # model table (cached 2026-11-03); recheck before publishing dollar figures.
@@ -180,9 +180,8 @@ def run_one(incident_id, arm, model, backend, trial=0, trace_dir=None):
 
 
 def _wandered(arm, args):
-    """Files-arm shell commands that leave the arm's own directory (could reach other arms' data)."""
-    cmd = args.get("command", "")
-    return arm == "files" and (".." in cmd or "/mnt" in cmd or "cd /" in cmd or " /" in cmd)
+    """Files-arm shell commands that tried to leave the arm's directory (refused by the backend; recorded)."""
+    return arm == "files" and leaves_dir(args.get("command", ""))
 
 
 def _span(trace_id, parent, name, t0, dur_ms, attrs, span_id=None):
