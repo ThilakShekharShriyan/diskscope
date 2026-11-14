@@ -46,6 +46,7 @@ GUARD_S = 60            # healthy windows end this long before the injection
 OFFSET_RANGE = (210, 450)
 N_QUIET = 6
 NO_FAULT = "no_fault"
+QUIET_INJECT_AT = WINDOW_S + GUARD_S  # healthy windows: the injection comes 60 s after the window ends
 PREFIXES = ("rcaevalm:", "rcaevalq:")
 HERE = os.path.dirname(os.path.abspath(__file__))
 DECOY_FILE = os.path.join(HERE, "rcaeval_decoys.json")
@@ -166,6 +167,25 @@ def decoy_for(task_id):
     return _DECOYS.get(task_id)
 
 
+def threshold_reference(task_ids):
+    """No-LLM reference for the healthy-window question: answer no_fault iff the plain digest's
+    METRICS section is empty ("none above threshold"). From the manifest's screen stats.
+    -> {"fp": (k, n) over healthy tasks, "fn": (k, n) over real tasks}, or None."""
+    fp, fn = [0, 0], [0, 0]
+    for tid in task_ids:
+        s = (decoy_for(tid) or {}).get("screen")
+        if not s or not tid.startswith(PREFIXES):
+            continue
+        says_fault = s["n_metric_lines"] > 0
+        if tid.startswith("rcaevalq:"):
+            fp[0] += says_fault
+            fp[1] += 1
+        else:
+            fn[0] += not says_fault
+            fn[1] += 1
+    return {"fp": tuple(fp), "fn": tuple(fn)} if fp[1] or fn[1] else None
+
+
 # ---------------- prepare ----------------
 def write_digest_variant(root, task_id, arm, text, index, salt=None):
     from . import prepare as P
@@ -223,6 +243,7 @@ def main(argv=None):
     if a.cases:
         want = set(a.cases.split(","))
         subset = [c for c in subset if c["case"] in want]
+    ever_root = {c["service"] for c in R.load_subset()}
     manifest = {}
     if os.path.exists(a.manifest):
         manifest = json.load(open(a.manifest))
@@ -239,8 +260,14 @@ def main(argv=None):
                 ("rcaevalq:" + c["case"], crop(data, *window_ms("rcaevalq", inject_s, t0_s)), None, True)]
         if not a.skip_full:
             jobs.append(("rcaeval:" + c["case"], data, c["service"], False))
+        inject_at = {"rcaevalm": inject_s - real_win[0] // 1000, "rcaeval": inject_s - t0_s,
+                     "rcaevalq": QUIET_INJECT_AT}
         for tid, d, truth, full in jobs:
             res, meta = prepare_task(tid, d, a.root, truth, README, full=full)
+            if meta:  # decoy onset relative to the (real or, for healthy windows, following) injection
+                meta["ever_root"] = meta["service"] in ever_root
+                meta["onset_rel_inject_s"] = meta["onset_s"] - inject_at[tid.split(":")[0]]
+                meta["screen"] = res["screen"]
             if tid.startswith("rcaevalm:"):
                 res["screen"]["inject_offset_s"] = inject_s - real_win[0] // 1000
             if tid.startswith("rcaevalq:"):

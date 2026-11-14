@@ -84,6 +84,12 @@ def load(paths):
 VARIANT_SUFFIX = {"rcaeval+t": "+time", "rcaevalm": "+mix", "rcaevalq": "+mix"}
 
 
+def _is_control(arm):
+    """Control arms (decoy/placebo, mixed suite) get their own Holm family, so adding them to a
+    report does not weaken the main interface comparisons."""
+    return arm.startswith("digest-") or "+mix" in arm
+
+
 def _decoy_for(task):
     """The innocent service the digest-decoy/-placebo line names for this task (from rcaeval_decoys.json).
     Looked up for every arm, so the plain digest and the other arms give the base rate."""
@@ -130,7 +136,13 @@ def controls(runs):
                     pairs.append({"model": model, "a": a + suf, "b": b + suf,
                                   "decoy_first": paired(base[a + suf], base[b + suf], "decoy_first"),
                                   "ac1": paired(base[a + suf], base[b + suf], "ac1")})
-    return {"false_positive": fp, "decoy": dec, "decoy_pairs": pairs}
+    ref = None
+    try:
+        from . import rcaeval_controls
+        ref = rcaeval_controls.threshold_reference(sorted({r["task"] for r in runs}))
+    except ImportError:  # pragma: no cover
+        pass
+    return {"false_positive": fp, "decoy": dec, "decoy_pairs": pairs, "threshold_reference": ref}
 
 
 def controls_markdown(c):
@@ -145,6 +157,10 @@ def controls_markdown(c):
                 s["model"], s["arm"], s["quiet_cases"], s["quiet_runs"], ci_txt(_m(s["fp_rate"])), pct(lo), pct(hi),
                 s["unsubmitted"], ci_txt(_m(s["fn_rate"])) if s["fn_rate"] else "—",
                 ci_txt(_m(s["correct_real"])) if s["correct_real"] else "—"))
+        ref = c.get("threshold_reference")
+        if ref:
+            L += ["", "No-LLM reference: answer no_fault iff the plain digest's METRICS section is empty: "
+                      "false positives %d/%d healthy windows, false negatives %d/%d real windows." % (ref["fp"] + ref["fn"])]
     if c["decoy"]:
         L += ["", "Decoy capture: how often the innocent service named by the inserted digest line is the agent's first "
                   "answer (base rate = same service on arms without the line):", "",
@@ -314,7 +330,8 @@ def holm(comps):
     """Holm-adjusted McNemar p-values, within each family (one model's arm pairs, or one arm's model pair)."""
     fams = {}
     for c in comps:
-        fams.setdefault(c.get("model") or ("arm:" + c["arm"]), []).append(c)
+        ctl = any(_is_control(x) for x in (c["a"], c["b"], c.get("arm", "")))
+        fams.setdefault((c.get("model") or ("arm:" + c["arm"])) + (":controls" if ctl else ""), []).append(c)
     for fam in fams.values():
         order = sorted(fam, key=lambda c: c["mcnemar_correct"]["p"])
         m, run = len(order), 0.0
