@@ -14,3 +14,4 @@ bench/sandbox/node_modules/
 /results/agentlab-traces-*/
 __pycache__/
 /agentlab/.venv/
+/data-ext/

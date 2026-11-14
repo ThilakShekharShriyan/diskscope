@@ -13,9 +13,11 @@ import statistics
 
 TOP_METRICS = 8
 TOP_LOGS = 6
-MIN_PRE = 12          # points before a change point (2 minutes)
-MIN_POST = 6          # points after a change point (1 minute)
-T_STEP_S = 10
+MIN_PRE_S = 120       # metric history needed before a change point
+MIN_POST_S = 60       # metric data needed after a change point
+# Window length and metric step are read from the data (60 min at 10 s for the
+# generated scenarios). Log-rate change points need window/5 minutes before and
+# window/10 after; a template is "new" if first seen after window/6.
 
 _MASKS = [(re.compile(r"\b[0-9a-f]{6,}\b"), "<h>"), (re.compile(r"\d+(\.\d+)?"), "<n>")]
 
@@ -26,16 +28,16 @@ def template(msg):
     return msg
 
 
-def _changepoint(v):
+def _changepoint(v, min_pre, min_post):
     """Best single mean shift. Returns (score, k, before_mean, after_mean) or None."""
     n = len(v)
-    if n < MIN_PRE + MIN_POST:
+    if n < min_pre + min_post:
         return None
     pre = [0.0]
     for x in v:
         pre.append(pre[-1] + x)
     best = None
-    for k in range(MIN_PRE, n - MIN_POST + 1):
+    for k in range(min_pre, n - min_post + 1):
         a, b = pre[k] / k, (pre[n] - pre[k]) / (n - k)
         gain = abs(b - a) * ((k * (n - k)) / n) ** 0.5
         if best is None or gain > best[0]:
@@ -58,21 +60,27 @@ def _num(x):
 
 def digest(data):
     spans, logs, metrics = data["spans"], data["logs"], data["metrics"]
-    t0 = min(r["ts_ms"] for r in metrics)
+    steps = sorted({r["ts_ms"] for r in metrics})
+    t0 = steps[0]
+    gaps = sorted(b - a for a, b in zip(steps, steps[1:]))
+    step_s = max(1, round(gaps[len(gaps) // 2] / 1000)) if gaps else 10
+    mins = max(1, -(-(steps[-1] + step_s * 1000 - t0) // 60000))
+    m_pre, m_post = -(-MIN_PRE_S // step_s), -(-MIN_POST_S // step_s)
+    l_pre, l_post = max(3, round(mins / 5)), max(3, round(mins / 10))
+    half_m = mins // 2
     index = {}
-    out = ["DIGEST: 60 min window, 10 s steps; times are offsets from window start.",
+    out = ["DIGEST: %d min window, %d s steps; times are offsets from window start." % (mins, step_s),
            "Most anomalous first. Call drill(<id>) for raw evidence behind any line."]
 
     # metric change points
     series = {}
     for r in metrics:
         series.setdefault(r["series"], {})[r["ts_ms"]] = r["value"]
-    steps = sorted({r["ts_ms"] for r in metrics})
     found = []
     for name, pts in series.items():
         tss = steps if name.endswith((".requests", ".errors")) else [ts for ts in steps if ts in pts]
         v = [pts.get(ts, 0.0) for ts in tss]
-        cp = _changepoint(v)
+        cp = _changepoint(v, m_pre, m_post)
         if cp and cp[0] >= 4:
             found.append((cp[0], name, cp, v, tss))
     found.sort(key=lambda x: -x[0])
@@ -85,14 +93,13 @@ def digest(data):
         ratio = (b / a) if a else float("inf")
         rtxt = ("x%.1f" % ratio) if a and ratio < 1000 else "from ~0"
         out.append("  %s %s  %s -> %s (%s) from %s  score %.0f" % (mid, name, _num(a), _num(b), rtxt, _fmt_t(onset), score))
-        index[mid] = _drill_metric(name, v, tss, k, spans, t0)
+        index[mid] = _drill_metric(name, v, tss, k, spans, t0, mins)
 
     # log templates
     groups = {}
     for r in logs:
         key = (r["component"], r["level"], template(r["msg"]))
         groups.setdefault(key, []).append(r)
-    mins = 60
     scored, rare = [], []
     for key, rows in groups.items():
         counts = [0] * mins
@@ -102,8 +109,8 @@ def digest(data):
             rare.extend(rows)
             continue
         first = int((rows[0]["ts_ms"] - t0) / 1000)
-        new = first >= 600 and sum(counts[: first // 60]) == 0
-        cp = _changepoint(counts) if len(counts) >= MIN_PRE + MIN_POST else None
+        new = first >= mins * 10 and sum(counts[: first // 60]) == 0
+        cp = _changepoint(counts, l_pre, l_post)
         score = cp[0] if cp else 0
         if new:
             score = max(score, 10 + len(rows) ** 0.5)
@@ -116,7 +123,7 @@ def digest(data):
     for i, (score, (comp, lvl, tpl), rows, counts, new, first) in enumerate(scored[:TOP_LOGS], 1):
         lid = "L%d" % i
         tag = "NEW since %s" % _fmt_t(first) if new else "rate %s -> %s /min" % (
-            _num(sum(counts[:30]) / 30), _num(sum(counts[30:]) / 30))
+            _num(sum(counts[:half_m]) / half_m), _num(sum(counts[half_m:]) / (mins - half_m)))
         out.append('  %s %s %s "%s"  n=%d  %s' % (lid, comp, lvl, tpl[:90], len(rows), tag))
         index[lid] = "\n".join(_line(r, t0) for r in rows[:5]) + ("\n... %d more" % (len(rows) - 5) if len(rows) > 5 else "")
 
@@ -132,12 +139,12 @@ def digest(data):
 
     # overall load and errors
     gw = [s for s in spans if s["parent_id"] is None]
-    half = t0 + 30 * 60000
+    half = t0 + half_m * 60000
     a = [s for s in gw if s["start_ms"] < half]
     b = [s for s in gw if s["start_ms"] >= half]
     er = lambda xs: 100.0 * sum(s["status"] == "ERROR" for s in xs) / max(1, len(xs))
     out.append("\nTOTALS  calls/min %s -> %s; error rate %.1f%% -> %.1f%% (first vs second half)" %
-               (_num(len(a) / 30), _num(len(b) / 30), er(a), er(b)))
+               (_num(len(a) / half_m), _num(len(b) / (mins - half_m)), er(a), er(b)))
     return "\n".join(out), index
 
 
@@ -147,13 +154,13 @@ def _line(r, t0):
                                          r["msg"], r.get("trace_id"), attrs)
 
 
-def _drill_metric(name, v, tss, k, spans, t0):
+def _drill_metric(name, v, tss, k, spans, t0, mins=60):
     lines = ["%s per minute (mean of points in each minute; - = no data), change point at %s:" %
              (name, _fmt_t(int((tss[k] - t0) / 1000)))]
     buckets = {}
     for ts, x in zip(tss, v):
         buckets.setdefault(int((ts - t0) / 60000), []).append(x)
-    lines.append("  " + " ".join(_num(sum(buckets[m]) / len(buckets[m])) if m in buckets else "-" for m in range(60)))
+    lines.append("  " + " ".join(_num(sum(buckets[m]) / len(buckets[m])) if m in buckets else "-" for m in range(mins)))
     parts = name.split(".")
     if len(parts) >= 3:
         comp, span_name = parts[0], ".".join(parts[1:-1])
